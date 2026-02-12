@@ -178,7 +178,7 @@ ${JSON.stringify(agentConfig.output, null, 2)}`;
         agentsRegistry.set(agentConfig.name, wrapAgentWithCleanup(rawAgent));
       }
 
-      // Build handle function (same pattern as WorkflowService.fromDsl)
+      // Build handle function
       const usedToolNames = Array.from(toolsRegistry.keys());
       const usedAgentNames = Array.from(agentsRegistry.keys());
       const fnParams = [

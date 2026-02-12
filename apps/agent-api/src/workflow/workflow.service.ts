@@ -1,13 +1,10 @@
-import { Injectable, Logger, NotFoundException, Optional, Inject } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 
 import { AgentService } from '../agent/agent.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ToolsService } from '../tool/tools.service';
 import { TemporalClientService } from '../temporal/temporal-client.service';
 
-import { EventBus } from './event-bus';
-import { Workflow } from './workflow';
-import { StartEvent, StopEvent } from './workflow.types';
 import { CreateWorkflowDto } from './workflow.controller';
 
 @Injectable()
@@ -15,202 +12,16 @@ export class WorkflowService {
   private readonly logger = new Logger(WorkflowService.name);
 
   constructor(
-    private readonly eventBus: EventBus,
     private readonly toolsService: ToolsService,
     private readonly agentService: AgentService,
     private readonly prismaService: PrismaService,
-    @Optional() @Inject(TemporalClientService)
-    private readonly temporalClient?: TemporalClientService,
+    private readonly temporalClient: TemporalClientService,
   ) {}
 
-  /**
-   * 从可能包含 markdown 代码块的字符串中提取纯内容
-   * LLM 经常返回 ```json ... ``` 包裹的内容，导致 JSON.parse 失败
-   */
-  private stripMarkdownFences(text: string): string {
-    if (typeof text !== 'string') return text;
-    const trimmed = text.trim();
-    const fenceMatch = trimmed.match(/^```(?:\w+)?\s*\n?([\s\S]*?)\n?\s*```$/);
-    if (fenceMatch) {
-      return fenceMatch[1].trim();
-    }
-    return text;
-  }
-
-  private wrapAgentWithCleanup(agent: any): any {
-    const originalRun = agent.run.bind(agent);
-    const strip = this.stripMarkdownFences.bind(this);
-    return {
-      ...agent,
-      run: async (...args: any[]) => {
-        const response = await originalRun(...args);
-        if (response?.data?.result && typeof response.data.result === 'string') {
-          response.data.result = strip(response.data.result);
-        }
-        return response;
-      },
-    };
-  }
-
-  async fromDsl(dsl: any, workflowId?: string, userId?: string): Promise<Workflow> {
-    const workflow = new Workflow<any, any, any>(this.eventBus, {});
-
-    const toolsRegistry = new Map<string, any>();
-    for (const tool of dsl.tools ?? []) {
-      if (typeof tool === 'string') {
-        toolsRegistry.set(tool, await this.toolsService.getToolByName(tool, userId));
-      }
-    }
-
-    const agentsRegistry = new Map<string, any>();
-
-    for (const agent of dsl.agents ?? []) {
-      const prompt = `${agent.prompt}
-永远按照下面的JSON结构生成内容，不要有其他无关的解释。
-${JSON.stringify(agent.output, null, 2)}
-      `;
-
-      let persistentAgent: any;
-      let tools = agent.tools || [];
-
-      // 如果有 workflowId，尝试查找已存在的工作流智能体
-      if (workflowId) {
-        const existingWorkflowAgent = await this.prismaService.workflowAgent.findFirst({
-          where: {
-            workflowId: workflowId,
-            agentName: agent.name,
-          },
-          include: {
-            agent: true,
-          },
-        });
-
-        if (existingWorkflowAgent) {
-          persistentAgent = existingWorkflowAgent.agent;
-          this.logger.log(`Found existing workflow agent: ${agent.name} (${persistentAgent.id})`);
-        }
-      }
-
-      // 如果没有找到现有智能体，创建新的持久化智能体
-      if (!persistentAgent) {
-        persistentAgent = await this.prismaService.agent.create({
-          data: {
-            name: workflowId ? `${workflowId}_${agent.name}` : `workflow_${agent.name}_${Date.now()}`,
-            description: agent.description || `工作流智能体: ${agent.name}`,
-            prompt: agent.prompt,
-            options: agent.output || {},
-            createdById: 'workflow-system',
-            isWorkflowGenerated: true,  // 标记为工作流生成的智能体
-          },
-        });
-
-        this.logger.log(`Created new workflow agent: ${agent.name} (${persistentAgent.id})`);
-
-        // 如果有 workflowId，创建工作流智能体关联
-        if (workflowId) {
-          await this.prismaService.workflowAgent.create({
-            data: {
-              workflowId: workflowId,
-              agentId: persistentAgent.id,
-              agentName: agent.name,
-            },
-          });
-        }
-      }
-
-      // 处理知识库关联
-      if (agent.knowledgeBases && agent.knowledgeBases.length > 0) {
-        // 清理现有的知识库关联（如果是更新）
-        await this.prismaService.agentKnowledgeBase.deleteMany({
-          where: { agentId: persistentAgent.id },
-        });
-
-        // 重新链接知识库
-        for (const kbId of agent.knowledgeBases) {
-          try {
-            await this.prismaService.agentKnowledgeBase.create({
-              data: {
-                agentId: persistentAgent.id,
-                knowledgeBaseId: kbId,
-              },
-            });
-          } catch (error) {
-            this.logger.warn(`Failed to link knowledge base ${kbId} to agent ${persistentAgent.id}:`, error);
-          }
-        }
-
-        // 确保知识库工具包存在
-        const existingKbToolkit = await this.prismaService.agentToolkit.findFirst({
-          where: {
-            agentId: persistentAgent.id,
-            toolkitId: 'knowledge-base-toolkit-01',
-          },
-        });
-
-        if (!existingKbToolkit) {
-          await this.prismaService.agentToolkit.create({
-            data: {
-              agentId: persistentAgent.id,
-              toolkitId: 'knowledge-base-toolkit-01',
-              settings: {},
-            },
-          });
-        }
-
-        // 获取知识库工具
-        const kbTools = await this.toolsService.getAgentTools(persistentAgent.id);
-        const kbToolNames = kbTools.map(tool => tool.name);
-        tools = [...tools, ...kbToolNames];
-      }
-
-      const rawAgent = await this.agentService.createAgentInstance(prompt, tools, undefined, userId);
-      // 包装智能体，自动清理 LLM 返回中的 markdown 代码块
-      agentsRegistry.set(agent.name, this.wrapAgentWithCleanup(rawAgent));
-    }
-
-    function buildHandle(
-      codeStr: string,
-      toolNames: string[],
-      agentNames: string[],
-    ) {
-      const params = ['event', 'context', ...toolNames, ...agentNames];
-      return new Function(
-        ...params,
-        `return (${codeStr})(event, context, ${toolNames
-          .concat(agentNames)
-          .join(', ')});`,
-      );
-    }
-
-    for (const step of dsl.steps ?? []) {
-      const toolNames = Array.from(toolsRegistry.keys()).filter((name) =>
-        step.handle.includes(name),
-      );
-      const agentNames = Array.from(agentsRegistry.keys()).filter((name) =>
-        step.handle.includes(name),
-      );
-
-      const realHandle = buildHandle(step.handle, toolNames, agentNames);
-
-      workflow.addStep({
-        eventType: step.event,
-        handle: async (event, context) => {
-          const toolFns = toolNames.map((n) => toolsRegistry.get(n));
-          const agentFns = agentNames.map((n) => agentsRegistry.get(n));
-          return await realHandle(event, context, ...toolFns, ...agentFns);
-        },
-      });
-    }
-
-    return workflow;
-  }
-
-  async getCreateDSLWorkflow(
+  async generateDsl(
     dslSchema: any,
     userMessage: string,
   ): Promise<any> {
-    const workflow = new Workflow<any, any, any>(this.eventBus, {});
-
     const tools = await this.prismaService.tool.findMany({
       where: {
         toolkitId: 'tool-explorer-toolkit-01',
@@ -449,43 +260,32 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
       tools.map((tool) => tool.name),
     );
 
-    workflow.addStep({
-      eventType: StartEvent.type,
-      handle: async (event, context) => {
-        const reply = await agent.run(event.data.userMessage);
+    const reply = await agent.run(userMessage);
 
-        try {
-          // 尝试不同的数据路径
+    try {
+      const dslText: string = reply.data.result;
+      this.logger.debug('Attempting to parse DSL text:', dslText);
 
-          const dslText: string = reply.data.result;
-          this.logger.debug('Attempting to parse DSL text:', dslText); // 调试信息
+      // 清理可能的markdown代码块
+      const cleanedText = dslText
+        .replace(/```json\s*/g, '')
+        .replace(/```\s*/g, '')
+        .trim();
 
-          // 清理可能的markdown代码块
-          const cleanedText = dslText
-            .replace(/```json\s*/g, '')
-            .replace(/```\s*/g, '')
-            .trim();
+      const dsl = JSON.parse(cleanedText);
 
-          const dsl = JSON.parse(cleanedText);
+      // 验证DSL
+      this.validateDsl(dsl);
 
-          // 验证DSL
-          this.validateDsl(dsl);
-
-          return new StopEvent({
-            data: dsl,
-          });
-        } catch (error) {
-          this.logger.error('DSL generation failed:', error);
-          this.logger.error('Agent reply was:', JSON.stringify(reply, null, 2));
-          const errorMessage = error instanceof Error ? error.message : String(error);
-          throw new Error(
-            `生成DSL失败: ${errorMessage}。智能体返回: ${JSON.stringify(reply, null, 2)}`,
-          );
-        }
-      },
-    });
-
-    return workflow;
+      return dsl;
+    } catch (error) {
+      this.logger.error('DSL generation failed:', error);
+      this.logger.error('Agent reply was:', JSON.stringify(reply, null, 2));
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      throw new Error(
+        `生成DSL失败: ${errorMessage}。智能体返回: ${JSON.stringify(reply, null, 2)}`,
+      );
+    }
   }
 
   async createWorkflow(createWorkflowDto: CreateWorkflowDto, userId: string) {
@@ -540,61 +340,36 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
     input: any,
     context: any = {},
     userId?: string,
-    engine: 'legacy' | 'temporal' = 'legacy',
   ) {
     // 获取工作流
     const workflowRecord = await this.getWorkflow(id, userId);
 
-    if (engine === 'temporal' && this.temporalClient) {
-      // Temporal 异步执行路径
-      const result = await this.temporalClient.startWorkflowAsync({
-        workflowId: id,
-        dsl: workflowRecord.DSL,
-        input,
-        userId,
-        context,
-      });
-
-      return {
-        workflowId: id,
-        input,
-        engine: 'temporal',
-        ...result,
-        executedAt: new Date().toISOString(),
-      };
-    }
-
-    // Legacy RxJS 执行路径
-    const workflow = await this.fromDsl(workflowRecord.DSL, id, userId);
-    const result = await workflow.execute(input);
+    const result = await this.temporalClient.startWorkflowAsync({
+      workflowId: id,
+      dsl: workflowRecord.DSL,
+      input,
+      userId,
+      context,
+    });
 
     return {
       workflowId: id,
       input,
-      output: result,
-      engine: 'legacy',
+      engine: 'temporal',
+      ...result,
       executedAt: new Date().toISOString(),
     };
   }
 
   async getTemporalWorkflowStatus(temporalWorkflowId: string) {
-    if (!this.temporalClient) {
-      throw new Error('Temporal is not configured');
-    }
     return this.temporalClient.getWorkflowStatus(temporalWorkflowId);
   }
 
   async getTemporalWorkflowResult(temporalWorkflowId: string) {
-    if (!this.temporalClient) {
-      throw new Error('Temporal is not configured');
-    }
     return this.temporalClient.getWorkflowResult(temporalWorkflowId);
   }
 
   async cancelTemporalWorkflow(temporalWorkflowId: string) {
-    if (!this.temporalClient) {
-      throw new Error('Temporal is not configured');
-    }
     return this.temporalClient.cancelWorkflow(temporalWorkflowId);
   }
 

@@ -66,7 +66,7 @@ export class WorkflowToolkit extends BaseToolkit {
       FunctionTool.from(this.executeWorkflow.bind(this), {
         name: 'executeWorkflow',
         description:
-          '执行指定工作流。input 为必填参数，字段须与 listWorkflows 返回的 inputSchema 匹配',
+          '执行指定工作流（通过 Temporal 异步执行）。input 为必填参数，字段须与 listWorkflows 返回的 inputSchema 匹配',
         parameters: {
           type: 'object',
           properties: {
@@ -78,11 +78,6 @@ export class WorkflowToolkit extends BaseToolkit {
               type: 'object',
               description:
                 '【必填】工作流输入参数，键值须与 inputSchema 一一对应',
-            },
-            engine: {
-              type: 'string',
-              description: '执行引擎：legacy（同步）或 temporal（异步），默认 legacy',
-              enum: ['legacy', 'temporal'],
             },
           },
           required: ['workflowId', 'input'],
@@ -149,7 +144,6 @@ export class WorkflowToolkit extends BaseToolkit {
           executeExample: {
             workflowId: wf.id,
             input: exampleInput,
-            engine: 'legacy',
           },
         };
       });
@@ -160,9 +154,8 @@ export class WorkflowToolkit extends BaseToolkit {
   async executeWorkflow(params: {
     workflowId: string;
     input: Record<string, any>;
-    engine?: string;
   }): Promise<string> {
-    const { workflowId, input, engine = 'legacy' } = params;
+    const { workflowId, input } = params;
     try {
       const workflowService = await this.getWorkflowService();
 
@@ -183,7 +176,6 @@ export class WorkflowToolkit extends BaseToolkit {
         input,
         {},
         undefined,
-        engine,
       );
       return JSON.stringify(result, null, 2);
     } catch (error: any) {

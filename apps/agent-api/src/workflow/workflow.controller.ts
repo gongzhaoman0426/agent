@@ -1,5 +1,5 @@
 import { Body, Controller, Post, Get, Param, Delete, Put, ForbiddenException } from '@nestjs/common';
-import { IsString, IsNotEmpty, IsObject, IsOptional, IsIn } from 'class-validator';
+import { IsString, IsNotEmpty, IsObject, IsOptional } from 'class-validator';
 
 import { WorkflowDiscoveryService } from './workflow-discovery.service';
 import { WorkflowService } from './workflow.service';
@@ -35,11 +35,6 @@ export class ExecuteWorkflowDto {
   @IsObject()
   @IsOptional()
   context?: any;
-
-  @IsString()
-  @IsOptional()
-  @IsIn(['legacy', 'temporal'])
-  engine?: 'legacy' | 'temporal';
 }
 
 export class UpdateWorkflowDslDto {
@@ -71,16 +66,12 @@ export class WorkflowController {
 
   @Post('generate-dsl')
   async generateDsl(@Body() body: CreateWorkflowDslDto) {
-    const workflow = await this.workflowService.getCreateDSLWorkflow(
+    const dsl = await this.workflowService.generateDsl(
       dslSchema,
       body.userMessage,
     );
 
-    const result = await workflow.execute({
-      userMessage: body.userMessage,
-    });
-
-    return { dsl: result };
+    return { dsl };
   }
 
   @Post()
@@ -115,7 +106,6 @@ export class WorkflowController {
       executeDto.input,
       executeDto.context,
       user.userId,
-      executeDto.engine || 'legacy',
     );
   }
 
