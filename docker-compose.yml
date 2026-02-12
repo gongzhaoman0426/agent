@@ -74,13 +74,13 @@ services:
 
   agent-api:
     build:
-      context: ./agent-api
+      context: ./apps/agent-api
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:
       - "3001:3001"
     env_file:
-      - ./agent-api/.env
+      - ./apps/agent-api/.env
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/hackathon
@@ -96,7 +96,7 @@ services:
 
   agent-web:
     build:
-      context: ./agent-web
+      context: ./apps/agent-web
       dockerfile: Dockerfile
     restart: unless-stopped
     ports:

@@ -27,7 +27,7 @@ export class ChatMemoryService {
       dimensions: 1536,
     });
     Settings.llm = openai({
-      model: 'gpt-5.2',
+      model: 'gpt-4o',
       temperature: 0.7,
       apiKey: process.env.OPENAI_API_KEY,
       additionalSessionOptions: {

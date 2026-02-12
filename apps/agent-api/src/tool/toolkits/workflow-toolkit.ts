@@ -54,7 +54,7 @@ export class WorkflowToolkit extends BaseToolkit {
       FunctionTool.from(this.listWorkflows.bind(this), {
         name: 'listWorkflows',
         description:
-          '列出当前智能体可用的所有工作流，返回工作流 ID、名称、描述和 inputSchema（输入参数结构）。执行工作流前必须先调用此工具，根据返回的 inputSchema 构造正确的 input 参数',
+          '列出可用工作流及其 inputSchema。执行工作流前须先调用此工具获取 inputSchema',
         parameters: {
           type: 'object',
           properties: {},
@@ -65,13 +65,8 @@ export class WorkflowToolkit extends BaseToolkit {
       // 2. executeWorkflow
       FunctionTool.from(this.executeWorkflow.bind(this), {
         name: 'executeWorkflow',
-        description: [
-          '执行指定工作流。',
-          '步骤：1) 先调用 listWorkflows 获取工作流列表；2) 从返回结果中找到目标工作流的 inputSchema；3) 按 inputSchema 的字段构造 input 对象。',
-          '参数格式示例：若 listWorkflows 返回的 inputSchema 为 {"question":"string","lang":"string"}，',
-          '则调用时必须传 input: {"question":"用户的问题","lang":"zh"}。',
-          '注意：input 是一个嵌套对象，不要把 inputSchema 的字段平铺到顶层。',
-        ].join(''),
+        description:
+          '执行指定工作流。input 为必填参数，字段须与 listWorkflows 返回的 inputSchema 匹配',
         parameters: {
           type: 'object',
           properties: {
@@ -81,7 +76,8 @@ export class WorkflowToolkit extends BaseToolkit {
             },
             input: {
               type: 'object',
-              description: '工作流输入参数对象。键值对必须与 listWorkflows 返回的 inputSchema 一一对应。例如 inputSchema={"question":"string"} 则传 {"question":"实际内容"}',
+              description:
+                '【必填】工作流输入参数，键值须与 inputSchema 一一对应',
             },
             engine: {
               type: 'string',
@@ -96,7 +92,7 @@ export class WorkflowToolkit extends BaseToolkit {
       FunctionTool.from(this.getWorkflowStatus.bind(this), {
         name: 'getWorkflowStatus',
         description:
-          '查询 Temporal 异步工作流的执行状态，返回状态（RUNNING/COMPLETED/FAILED 等）和时间信息',
+          '查询 Temporal 异步工作流的执行状态（RUNNING/COMPLETED/FAILED 等）',
         parameters: {
           type: 'object',
           properties: {
@@ -114,7 +110,7 @@ export class WorkflowToolkit extends BaseToolkit {
       FunctionTool.from(this.getWorkflowResult.bind(this), {
         name: 'getWorkflowResult',
         description:
-          '获取已完成的 Temporal 异步工作流的最终结果。工作流未完成时会返回提示，建议先用 getWorkflowStatus 确认状态',
+          '获取已完成的 Temporal 异步工作流结果。建议先用 getWorkflowStatus 确认状态为 COMPLETED',
         parameters: {
           type: 'object',
           properties: {
@@ -169,6 +165,19 @@ export class WorkflowToolkit extends BaseToolkit {
     const { workflowId, input, engine = 'legacy' } = params;
     try {
       const workflowService = await this.getWorkflowService();
+
+      // 校验 input 字段是否匹配 DSL 的 inputSchema
+      const workflow = await workflowService.getWorkflow(workflowId);
+      const inputSchema = this.extractInputSchema(workflow.DSL);
+      const schemaKeys = Object.keys(inputSchema);
+      const inputKeys = Object.keys(input || {});
+      const missingKeys = schemaKeys.filter((k) => !inputKeys.includes(k));
+      if (missingKeys.length > 0) {
+        return JSON.stringify({
+          error: `input 缺少必需字段: ${missingKeys.join(', ')}。期望的 inputSchema: ${JSON.stringify(inputSchema)}，实际收到: ${JSON.stringify(input)}`,
+        }, null, 2);
+      }
+
       const result = await workflowService.executeWorkflow(
         workflowId,
         input,

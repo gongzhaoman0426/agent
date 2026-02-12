@@ -12,8 +12,8 @@ node_modules
 .env
 .env.local
 .env.*.local
-agent-api/.env
-agent-api/.env.prod
-agent-web/.env
-agent-web/.env.prod
-agent-api/uploads
+apps/agent-api/.env
+apps/agent-api/.env.prod
+apps/agent-web/.env
+apps/agent-web/.env.prod
+apps/agent-api/uploads

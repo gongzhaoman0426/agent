@@ -41,7 +41,7 @@ export class LlamaindexService implements OnModuleInit {
     const { openai, OpenAIEmbedding, Settings } = await this.getLlamaindexModules();
     try {
       this.defaultLlm = openai({
-        model: 'gpt-5.2',
+        model: 'gpt-4o',
         temperature: 0.7,
         apiKey: process.env.OPENAI_API_KEY,
         additionalSessionOptions: {

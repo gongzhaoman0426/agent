@@ -8,7 +8,7 @@ importers:
 
   .: {}
 
-  agent-api:
+  apps/agent-api:
     dependencies:
       '@llamaindex/openai':
         specifier: ^0.4.3
@@ -159,7 +159,7 @@ importers:
         specifier: ^8.24.1
         version: 8.55.0(eslint@9.39.2(jiti@2.6.1))(typescript@5.9.3)
 
-  agent-web:
+  apps/agent-web:
     dependencies:
       '@radix-ui/react-alert-dialog':
         specifier: ^1.1.15

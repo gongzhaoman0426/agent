@@ -35,7 +35,7 @@ services:
     ports:
       - "3001:3001"
     env_file:
-      - ./agent-api/.env.prod
+      - ./apps/agent-api/.env.prod
     environment:
       NODE_ENV: production
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/hackathon

@@ -192,13 +192,21 @@ ${JSON.stringify(agentConfig.output, null, 2)}`;
         `return (${handleCode})(event, context, ${usedToolNames.concat(usedAgentNames).join(', ')});`,
       );
 
-      const event = { type: eventType, data: eventData };
+      const event = { type: eventType, data: eventData || {} };
       const toolFns = usedToolNames.map((n) => toolsRegistry.get(n));
       const agentFns = usedAgentNames.map((n) => agentsRegistry.get(n));
 
       logger.log(`Executing step: ${eventType}`);
-      const result = await realHandle(event, context, ...toolFns, ...agentFns);
-      return result || null;
+      logger.log(`Event data keys: ${JSON.stringify(Object.keys(event.data))}`);
+      try {
+        const result = await realHandle(event, context, ...toolFns, ...agentFns);
+        return result || null;
+      } catch (error) {
+        logger.error(
+          `Step ${eventType} failed. event.data=${JSON.stringify(eventData)}, handleCode=${handleCode.substring(0, 200)}...`,
+        );
+        throw error;
+      }
     },
   };
 }
