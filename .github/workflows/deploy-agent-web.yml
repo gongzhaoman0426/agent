@@ -5,7 +5,7 @@ on:
     branches:
       - latest
     paths:
-      - agent-web/**
+      - apps/agent-web/**
       - docker-compose.prod.yml
       - .github/workflows/deploy-agent-web.yml
   workflow_dispatch:
@@ -34,8 +34,8 @@ jobs:
       - name: Build and push image
         uses: docker/build-push-action@v6
         with:
-          context: ./agent-web
-          file: ./agent-web/Dockerfile
+          context: ./apps/agent-web
+          file: ./apps/agent-web/Dockerfile
           push: true
           tags: |
             ${{ env.IMAGE_NAME }}:latest
@@ -48,6 +48,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
+            echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ github.repository_owner }} --password-stdin
             cd ${{ secrets.DEPLOY_PATH }}
             docker pull ${{ env.IMAGE_NAME }}:latest
             GHCR_OWNER=${{ github.repository_owner }} docker compose -f docker-compose.prod.yml up -d agent-web
