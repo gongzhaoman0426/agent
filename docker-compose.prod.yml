@@ -29,6 +29,49 @@ services:
       timeout: 5s
       retries: 5
 
+  temporal-db:
+    image: postgres:15
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: temporal
+      POSTGRES_USER: temporal
+      POSTGRES_PASSWORD: temporal
+    ports:
+      - "5433:5432"
+    volumes:
+      - temporal_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U temporal"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  temporal:
+    image: temporalio/auto-setup:1.24
+    restart: unless-stopped
+    ports:
+      - "7233:7233"
+    environment:
+      DB: postgres12
+      DB_PORT: 5432
+      POSTGRES_USER: temporal
+      POSTGRES_PWD: temporal
+      POSTGRES_SEEDS: temporal-db
+    depends_on:
+      temporal-db:
+        condition: service_healthy
+
+  temporal-ui:
+    image: temporalio/ui:2.26.2
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      TEMPORAL_ADDRESS: temporal:7233
+      TEMPORAL_CORS_ORIGINS: http://localhost:5179
+    depends_on:
+      - temporal
+
   agent-api:
     image: ghcr.io/${GHCR_OWNER}/agent-api:latest
     restart: unless-stopped
@@ -40,11 +83,14 @@ services:
       NODE_ENV: production
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/hackathon
       REDIS_URL: redis://redis:6379
+      TEMPORAL_ADDRESS: temporal:7233
     depends_on:
       postgres:
         condition: service_healthy
       redis:
         condition: service_healthy
+      temporal:
+        condition: service_started
 
   agent-web:
     image: ghcr.io/${GHCR_OWNER}/agent-web:latest
@@ -57,3 +103,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  temporal_db_data:
