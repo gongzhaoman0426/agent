@@ -1,0 +1,282 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                  String                @id @default(cuid())
+  email               String                @unique
+  emailVerified       Boolean               @default(false)
+  name                String
+  image               String?
+  username            String                @unique
+  displayUsername     String?
+  accounts            Account[]
+  sessions            Session[]
+  userToolkitSettings UserToolkitSettings[]
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  @@map("users")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+model Agent {
+  id                   String                 @id @default(cuid())
+  name                 String
+  description          String?
+  prompt               String
+  options              Json
+  agentToolkits        AgentToolkit[]
+  agentTools           AgentTool[]
+  agentKnowledgeBases  AgentKnowledgeBase[]
+  agentWorkflows       AgentWorkflow[]
+  workflowAgents       WorkflowAgent[]
+  chatSessions         ChatSession[]
+  createdById          String?
+  isWorkflowGenerated  Boolean                @default(false)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+  deleted              Boolean                @default(false)
+
+  @@map("agents")
+}
+
+model Toolkit {
+  id                  String                @id
+  name                String
+  description         String
+  settings            Json
+  agentToolkits       AgentToolkit[]
+  tools               Tool[]
+  userToolkitSettings UserToolkitSettings[]
+  createdAt           DateTime              @default(now()) @map("created_at")
+  updatedAt           DateTime              @default(now()) @map("updated_at")
+  deleted             Boolean               @default(false)
+
+  @@map("toolkits")
+}
+
+model AgentToolkit {
+  id        String   @id @default(cuid())
+  settings  Json
+  agent     Agent    @relation(fields: [agentId], references: [id])
+  agentId   String
+  toolkit   Toolkit  @relation(fields: [toolkitId], references: [id])
+  toolkitId String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @default(now()) @map("updated_at")
+
+  @@unique([agentId, toolkitId])
+  @@map("agent_toolkits")
+}
+
+model Tool {
+  id          String        @id @default(cuid())
+  name        String        @unique
+  description String
+  schema      Json
+  toolkit     Toolkit     @relation(fields: [toolkitId], references: [id])
+  toolkitId   String
+  agentTools  AgentTool[]
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @default(now()) @map("updated_at")
+
+  @@map("tools")
+}
+
+model AgentTool {
+  id        String   @id @default(cuid())
+  agent     Agent    @relation(fields: [agentId], references: [id])
+  agentId   String
+  tool      Tool     @relation(fields: [toolId], references: [id])
+  toolId    String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("agent_tools")
+}
+
+model WorkFlow {
+  id          String   @id @default(cuid())
+  name        String
+  description String?
+  DSL         Json
+  source      String   @default("api")
+  createdById String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  deleted     Boolean  @default(false)
+
+  // 工作流关联的智能体
+  workflowAgents WorkflowAgent[]
+  agentWorkflows AgentWorkflow[]
+
+  @@map("workflows")
+}
+
+// 工作流智能体关联表
+model WorkflowAgent {
+  id         String   @id @default(cuid())
+  workflowId String
+  agentId    String
+  agentName  String   // DSL 中的智能体名称
+  createdAt  DateTime @default(now())
+
+  workflow   WorkFlow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  agent      Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+
+  @@unique([workflowId, agentName])
+  @@map("workflow_agents")
+}
+
+model KnowledgeBase {
+  id                   String                 @id @default(cuid())
+  name                 String
+  description          String?
+  vectorStoreName      String                 @unique
+  createdById          String?
+  agentKnowledgeBases  AgentKnowledgeBase[]
+  files                File[]
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
+
+  @@map("knowledge_bases")
+}
+
+model AgentKnowledgeBase {
+  id              String        @id @default(cuid())
+  agent           Agent         @relation(fields: [agentId], references: [id])
+  agentId         String
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id])
+  knowledgeBaseId String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@unique([agentId, knowledgeBaseId])
+  @@map("agent_knowledge_bases")
+}
+
+model AgentWorkflow {
+  id         String   @id @default(cuid())
+  agent      Agent    @relation(fields: [agentId], references: [id])
+  agentId    String
+  workflow   WorkFlow @relation(fields: [workflowId], references: [id])
+  workflowId String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([agentId, workflowId])
+  @@map("agent_workflows")
+}
+
+model File {
+  id              String        @id @default(cuid())
+  name            String
+  path            String
+  status          FileStatus    @default(PENDING)
+  knowledgeBase   KnowledgeBase @relation(fields: [knowledgeBaseId], references: [id])
+  knowledgeBaseId String
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@map("files")
+}
+
+enum FileStatus {
+  PENDING
+  PROCESSING
+  PROCESSED
+  FAILED
+}
+
+model ChatSession {
+  id        String        @id @default(cuid())
+  title     String        @default("新对话")
+  agentId   String
+  agentName String
+  userId    String?
+  agent     Agent         @relation(fields: [agentId], references: [id])
+  messages  ChatMessage[]
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+  deleted   Boolean       @default(false)
+
+  @@map("chat_sessions")
+}
+
+model ChatMessage {
+  id        String      @id @default(cuid())
+  role      String
+  content   String
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  createdAt DateTime    @default(now())
+
+  @@map("chat_messages")
+}
+
+model UserToolkitSettings {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id])
+  userId    String
+  toolkit   Toolkit  @relation(fields: [toolkitId], references: [id])
+  toolkitId String
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@unique([userId, toolkitId])
+  @@map("user_toolkit_settings")
+}

@@ -1,0 +1,14 @@
+services:
+  agent-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5179:80"
+    networks:
+      - agent-api_default
+
+networks:
+  agent-api_default:
+    external: true
