@@ -5,7 +5,7 @@ import { KnowledgeBaseService } from 'src/knowledge-base/knowledge-base.service'
 
 @toolkitId('knowledge-base-toolkit-01')
 export class KnowledgeBaseToolkit extends BaseToolkit {
-  name = 'knowledge base toolkit';
+  name = '知识库工具箱';
   description = '知识库工具包，提供知识库查询和管理功能';
   tools: FunctionTool<any, any>[] = [];
   settings = {};

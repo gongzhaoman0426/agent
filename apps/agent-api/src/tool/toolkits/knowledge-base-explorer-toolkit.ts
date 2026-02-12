@@ -5,7 +5,7 @@ import { PrismaService } from '../../prisma/prisma.service';
 
 @toolkitId('knowledge-base-explorer-toolkit-01')
 export class KnowledgeBaseExplorerToolkit extends BaseToolkit {
-  name = 'knowledge base explorer toolkit';
+  name = '知识库发现工具箱';
   description = '知识库发现工具包，用于工作流编排时发现和了解可用的知识库';
   tools: FunctionTool<any, any>[] = [];
   settings = {};

@@ -11,8 +11,8 @@ dayjs.extend(timezone);
 
 @toolkitId('common-toolkit-01')
 export class CommonToolkit extends BaseToolkit {
-  name = 'Common Tools';
-  description = 'Basic utility tools for common operations';
+  name = '通用工具箱';
+  description = '基础通用工具，提供时间查询、等待等常用操作';
   settings = {};
 
   tools: ToolsType[] = [];
@@ -31,14 +31,14 @@ export class CommonToolkit extends BaseToolkit {
     this.tools = [
       FunctionTool.from(this.getCurrentTime.bind(this), {
         name: 'getCurrentTime',
-        description: 'Get the current time in a specific timezone. ',
+        description: '获取指定时区的当前时间',
         parameters: {
           type: 'object',
           properties: {
             timezone: {
               type: 'string',
               description:
-                'IANA timezone identifier, e.g., "Asia/Shanghai", "UTC". Optional, defaults to Asia/Shanghai if not provided.',
+                'IANA 时区标识符，如 "Asia/Shanghai"、"UTC"。可选，默认 Asia/Shanghai',
             },
           },
           required: [],

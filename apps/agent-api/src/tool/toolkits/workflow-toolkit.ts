@@ -6,7 +6,7 @@ import { PrismaService } from 'src/prisma/prisma.service';
 
 @toolkitId('workflow-toolkit-01')
 export class WorkflowToolkit extends BaseToolkit {
-  name = 'Workflow Toolkit';
+  name = '工作流工具箱';
   description = '工作流工具包，允许智能体发现、执行和查询工作流';
   tools: ToolsType[] = [];
   settings = {};
