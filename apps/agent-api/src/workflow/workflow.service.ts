@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 
 import { AgentService } from '../agent/agent.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis';
 import { ToolsService } from '../tool/tools.service';
 import { TemporalClientService } from '../temporal/temporal-client.service';
 
@@ -16,6 +17,7 @@ export class WorkflowService {
     private readonly agentService: AgentService,
     private readonly prismaService: PrismaService,
     private readonly temporalClient: TemporalClientService,
+    private readonly redis: RedisService,
   ) {}
 
   async generateDsl(
@@ -302,26 +304,37 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
       },
     });
 
+    // 失效用户 workflow 列表缓存
+    await this.redis.del(`user:${userId}:workflows`);
+
     return workflow;
   }
 
   async getAllWorkflows(userId: string) {
-    return this.prismaService.workFlow.findMany({
-      where: {
-        deleted: false,
-        OR: [
-          { createdById: userId },
-          { source: 'code' },
-        ],
-      },
-      orderBy: { createdAt: 'desc' },
-    });
+    return this.redis.getOrSet(
+      `user:${userId}:workflows`,
+      () => this.prismaService.workFlow.findMany({
+        where: {
+          deleted: false,
+          OR: [
+            { createdById: userId },
+            { source: 'code' },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+      }),
+      300,
+    );
   }
 
   async getWorkflow(id: string, userId?: string) {
-    const workflow = await this.prismaService.workFlow.findUnique({
-      where: { id, deleted: false },
-    });
+    const workflow = await this.redis.getOrSet(
+      `workflow:${id}`,
+      () => this.prismaService.workFlow.findUnique({
+        where: { id, deleted: false },
+      }),
+      3600,
+    );
 
     if (!workflow) {
       throw new NotFoundException(`Workflow with id ${id} not found`);
@@ -375,25 +388,29 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
 
   // 获取工作流关联的智能体
   async getWorkflowAgents(workflowId: string) {
-    return this.prismaService.workflowAgent.findMany({
-      where: { workflowId },
-      include: {
-        agent: {
-          include: {
-            agentKnowledgeBases: {
-              include: {
-                knowledgeBase: true,
+    return this.redis.getOrSet(
+      `workflow:${workflowId}:agents`,
+      () => this.prismaService.workflowAgent.findMany({
+        where: { workflowId },
+        include: {
+          agent: {
+            include: {
+              agentKnowledgeBases: {
+                include: {
+                  knowledgeBase: true,
+                },
               },
-            },
-            agentToolkits: {
-              include: {
-                toolkit: true,
+              agentToolkits: {
+                include: {
+                  toolkit: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      }),
+      3600,
+    );
   }
 
   // 删除工作流时清理关联的智能体
@@ -414,6 +431,9 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
     await this.prismaService.workflowAgent.deleteMany({
       where: { workflowId },
     });
+
+    // 失效缓存
+    await this.redis.del(`workflow:${workflowId}:agents`);
   }
 
   // 更新工作流智能体并同步 DSL
@@ -440,6 +460,10 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
     });
 
     // 不再同步更新 DSL，保持 DSL 稳定
+
+    // 失效缓存
+    await this.redis.del(`workflow:${workflowId}:agents`);
+
     return updatedAgent;
   }
 
@@ -454,10 +478,15 @@ const classification = JSON.parse(resultString); // 如果需要结构化数据�
       throw new Error('Cannot delete a code-defined workflow');
     }
 
-    return this.prismaService.workFlow.update({
+    const result = await this.prismaService.workFlow.update({
       where: { id },
       data: { deleted: true },
     });
+
+    // 失效缓存
+    await this.redis.del(`workflow:${id}`, `workflow:${id}:agents`, `user:${userId}:workflows`);
+
+    return result;
   }
 
   private validateDsl(dsl: any) {

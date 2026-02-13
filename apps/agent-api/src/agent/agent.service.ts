@@ -6,6 +6,7 @@ import { CreateAgentDto, UpdateAgentDto, ChatWithAgentDto } from './agent.type';
 import { ChatMemoryService } from './chat-memory.service';
 import { LlamaindexService } from '../llamaindex/llamaindex.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis';
 
 @Injectable()
 export class AgentService {
@@ -16,69 +17,78 @@ export class AgentService {
     private readonly llamaIndexService: LlamaindexService,
     private readonly toolsService: ToolsService,
     private readonly chatMemoryService: ChatMemoryService,
+    private readonly redis: RedisService,
   ) {}
 
   async findAll(userId: string) {
-    return this.prisma.agent.findMany({
-      where: {
-        deleted: false,
-        isWorkflowGenerated: false,
-        createdById: userId,
-      },
-      include: {
-        agentToolkits: {
-          include: {
-            toolkit: {
-              include: {
-                tools: true,
+    return this.redis.getOrSet(
+      `user:${userId}:agents`,
+      () => this.prisma.agent.findMany({
+        where: {
+          deleted: false,
+          isWorkflowGenerated: false,
+          createdById: userId,
+        },
+        include: {
+          agentToolkits: {
+            include: {
+              toolkit: {
+                include: {
+                  tools: true,
+                },
               },
             },
           },
-        },
-        agentKnowledgeBases: {
-          include: {
-            knowledgeBase: true,
+          agentKnowledgeBases: {
+            include: {
+              knowledgeBase: true,
+            },
+          },
+          agentWorkflows: {
+            include: {
+              workflow: true,
+            },
           },
         },
-        agentWorkflows: {
-          include: {
-            workflow: true,
-          },
-        },
-      },
-    });
+      }),
+      300,
+    );
   }
 
   async findOne(id: string, userId?: string) {
-    const agent = await this.prisma.agent.findUnique({
-      where: { id, deleted: false },
-      include: {
-        agentTools: {
-          include: {
-            tool: true,
+    const agent = await this.redis.getOrSet(
+      `agent:${id}:full`,
+      () => this.prisma.agent.findUnique({
+        where: { id, deleted: false },
+        include: {
+          agentTools: {
+            include: {
+              tool: true,
+            },
           },
-        },
-        agentToolkits: {
-          include: {
-            toolkit: {
-              include: {
-                tools: true,
+          agentToolkits: {
+            include: {
+              toolkit: {
+                include: {
+                  tools: true,
+                },
               },
             },
           },
-        },
-        agentKnowledgeBases: {
-          include: {
-            knowledgeBase: true,
+          agentKnowledgeBases: {
+            include: {
+              knowledgeBase: true,
+            },
+          },
+          agentWorkflows: {
+            include: {
+              workflow: true,
+            },
           },
         },
-        agentWorkflows: {
-          include: {
-            workflow: true,
-          },
-        },
-      },
-    });
+      }),
+      3600,
+    );
 
     if (!agent) {
       throw new NotFoundException(`Agent with ID ${id} not found`);
@@ -112,6 +122,9 @@ export class AgentService {
 
     // 处理工作流分配
     await this.assignWorkflowsToAgent(agent.id, createAgentDto);
+
+    // 失效用户 agent 列表缓存
+    await this.redis.del(`user:${userId}:agents`);
 
     return agent;
   }
@@ -252,16 +265,24 @@ export class AgentService {
       await this.assignWorkflowsToAgent(id, updateAgentDto);
     }
 
+    // 失效缓存
+    await this.redis.del(`agent:${id}:full`, `user:${userId}:agents`, `agent:${id}:toolkit-assignments`);
+
     return this.findOne(id, userId);
   }
 
   async remove(id: string, userId: string) {
     await this.findOne(id, userId);
 
-    return this.prisma.agent.update({
+    const result = await this.prisma.agent.update({
       where: { id },
       data: { deleted: true },
     });
+
+    // 失效缓存
+    await this.redis.del(`agent:${id}:full`, `user:${userId}:agents`);
+
+    return result;
   }
 
   private wrapToolWithLogging(tool: any): any {
@@ -316,37 +337,45 @@ export class AgentService {
   // ========== 会话 CRUD ==========
 
   async getAllSessions(userId: string) {
-    return this.prisma.chatSession.findMany({
-      where: {
-        deleted: false,
-        userId,
-      },
-      orderBy: { updatedAt: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        agentId: true,
-        agentName: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    return this.redis.getOrSet(
+      `user:${userId}:sessions`,
+      () => this.prisma.chatSession.findMany({
+        where: {
+          deleted: false,
+          userId,
+        },
+        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          title: true,
+          agentId: true,
+          agentName: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      120,
+    );
   }
 
   async getAgentSessions(agentId: string, userId: string) {
     await this.findOne(agentId, userId);
-    return this.prisma.chatSession.findMany({
-      where: { agentId, deleted: false, userId },
-      orderBy: { updatedAt: 'desc' },
-      select: {
-        id: true,
-        title: true,
-        agentId: true,
-        agentName: true,
-        createdAt: true,
-        updatedAt: true,
-      },
-    });
+    return this.redis.getOrSet(
+      `agent:${agentId}:sessions:${userId}`,
+      () => this.prisma.chatSession.findMany({
+        where: { agentId, deleted: false, userId },
+        orderBy: { updatedAt: 'desc' },
+        select: {
+          id: true,
+          title: true,
+          agentId: true,
+          agentName: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      120,
+    );
   }
 
   async getSessionDetail(agentId: string, sessionId: string, userId: string) {
@@ -374,6 +403,9 @@ export class AgentService {
 
     // 删除该 session 在向量库中的记忆
     await this.chatMemoryService.deleteSessionMemory(agentId, sessionId);
+
+    // 失效会话缓存
+    await this.redis.del(`user:${userId}:sessions`, `agent:${agentId}:sessions:${userId}`);
 
     return this.prisma.chatSession.update({
       where: { id: sessionId },
@@ -404,6 +436,8 @@ export class AgentService {
           userId,
         },
       });
+      // 失效会话列表缓存
+      await this.redis.del(`user:${userId}:sessions`, `agent:${agentId}:sessions:${userId}`);
     }
 
     // 保存用户消息到 DB
@@ -525,6 +559,8 @@ export class AgentService {
           userId,
         },
       });
+      // 失效会话列表缓存
+      await this.redis.del(`user:${userId}:sessions`, `agent:${agentId}:sessions:${userId}`);
     }
 
     // 保存用户消息到 DB
@@ -667,16 +703,20 @@ export class AgentService {
   async getAgentToolkits(agentId: string, userId: string) {
     await this.findOne(agentId, userId);
 
-    return this.prisma.agentToolkit.findMany({
-      where: { agentId },
-      include: {
-        toolkit: {
-          include: {
-            tools: true,
+    return this.redis.getOrSet(
+      `agent:${agentId}:toolkits-detail`,
+      () => this.prisma.agentToolkit.findMany({
+        where: { agentId },
+        include: {
+          toolkit: {
+            include: {
+              tools: true,
+            },
           },
         },
-      },
-    });
+      }),
+      3600,
+    );
   }
 
 }

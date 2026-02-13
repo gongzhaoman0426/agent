@@ -2,6 +2,7 @@ import { Injectable, OnModuleInit, Type, Logger } from '@nestjs/common';
 import { DiscoveryService, ModuleRef, Reflector } from '@nestjs/core';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis';
 import { Toolkit } from './interface/toolkit';
 import { TOOLKIT_ID_KEY } from './toolkits.decorator';
 
@@ -15,6 +16,7 @@ export class ToolkitsService implements OnModuleInit {
     private reflector: Reflector,
     private prismaService: PrismaService,
     private moduleRef: ModuleRef,
+    private readonly redis: RedisService,
   ) {}
 
   async onModuleInit() {
@@ -26,6 +28,9 @@ export class ToolkitsService implements OnModuleInit {
     this.discoverToolkits();
     await this.syncToolkitsToDatabase();
     await this.cleanupObsoleteToolkits();
+    // 失效 toolkit 相关缓存
+    await this.redis.del('toolkits:all');
+    await this.redis.delByPattern('tool:name:*');
     this.logger.log('Toolkit discovery and synchronization completed');
   }
 
@@ -159,24 +164,39 @@ export class ToolkitsService implements OnModuleInit {
   }
 
   async getAgentToolkitInstances(agentId: string): Promise<Toolkit[]> {
-    const agentToolkits = await this.prismaService.agentToolkit.findMany({
-      where: { agentId },
-      include: { toolkit: true },
-    });
+    const agentToolkits = await this.redis.getOrSet(
+      `agent:${agentId}:toolkit-assignments`,
+      () => this.prismaService.agentToolkit.findMany({
+        where: { agentId },
+        include: { toolkit: true },
+      }),
+      3600,
+    );
 
     // 查询 agent 的创建者
-    const agent = await this.prismaService.agent.findUnique({
-      where: { id: agentId },
-      select: { createdById: true },
-    });
-    const userId = agent?.createdById;
+    const userId = await this.redis.getOrSet<string | null>(
+      `agent:${agentId}:creator`,
+      async () => {
+        const agent = await this.prismaService.agent.findUnique({
+          where: { id: agentId },
+          select: { createdById: true },
+        });
+        return agent?.createdById ?? null;
+      },
+      3600,
+    );
 
     // 批量查询用户的 toolkit settings
     let userSettingsMap: Record<string, any> = {};
     if (userId) {
-      const userSettings = await this.prismaService.userToolkitSettings.findMany({
-        where: { userId, toolkitId: { in: agentToolkits.map(at => at.toolkitId) } },
-      });
+      const toolkitIds = agentToolkits.map(at => at.toolkitId).sort().join(',');
+      const userSettings = await this.redis.getOrSet(
+        `user:${userId}:toolkit-settings:${toolkitIds}`,
+        () => this.prismaService.userToolkitSettings.findMany({
+          where: { userId, toolkitId: { in: agentToolkits.map(at => at.toolkitId) } },
+        }),
+        1800,
+      );
       userSettingsMap = Object.fromEntries(
         userSettings.map(us => [us.toolkitId, us.settings]),
       );
@@ -194,21 +214,25 @@ export class ToolkitsService implements OnModuleInit {
   }
 
   async getAllToolkits() {
-    return this.prismaService.toolkit.findMany({
-      where: { deleted: false },
-      include: {
-        tools: {
-          select: {
-            id: true,
-            name: true,
-            description: true,
+    return this.redis.getOrSet(
+      'toolkits:all',
+      () => this.prismaService.toolkit.findMany({
+        where: { deleted: false },
+        include: {
+          tools: {
+            select: {
+              id: true,
+              name: true,
+              description: true,
+            },
           },
         },
-      },
-      orderBy: {
-        name: 'asc',
-      },
-    });
+        orderBy: {
+          name: 'asc',
+        },
+      }),
+      3600,
+    );
   }
 
   async getAgentToolkits(agentId: string) {
@@ -232,11 +256,14 @@ export class ToolkitsService implements OnModuleInit {
       },
     });
 
+    // 失效缓存
+    await this.redis.del(`agent:${agentId}:toolkit-assignments`, `agent:${agentId}:full`);
+
     return this.filterSensitiveSettings(result);
   }
 
   async removeToolkitFromAgent(agentId: string, toolkitId: string) {
-    return this.prismaService.agentToolkit.delete({
+    const result = await this.prismaService.agentToolkit.delete({
       where: {
         agentId_toolkitId: {
           agentId,
@@ -244,6 +271,11 @@ export class ToolkitsService implements OnModuleInit {
         },
       },
     });
+
+    // 失效缓存
+    await this.redis.del(`agent:${agentId}:toolkit-assignments`, `agent:${agentId}:full`);
+
+    return result;
   }
 
   async applyAgentToolkitSettings(
@@ -284,11 +316,16 @@ export class ToolkitsService implements OnModuleInit {
   }
 
   async updateUserToolkitSettings(userId: string, toolkitId: string, settings: any): Promise<any> {
-    return this.prismaService.userToolkitSettings.upsert({
+    const result = await this.prismaService.userToolkitSettings.upsert({
       where: { userId_toolkitId: { userId, toolkitId } },
       update: { settings },
       create: { userId, toolkitId, settings },
     });
+
+    // 失效用户 toolkit settings 缓存
+    await this.redis.delByPattern(`user:${userId}:toolkit-settings:*`);
+
+    return result;
   }
 
   filterSensitiveSettings(toolkit: any) {

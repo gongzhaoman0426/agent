@@ -1,7 +1,12 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
+import { RedisService } from '../redis';
 
 @Injectable()
 export class HealthService {
+  private readonly logger = new Logger(HealthService.name);
+
+  constructor(private readonly redisService: RedisService) {}
+
   getHealthStatus() {
     return {
       status: 'ok',
@@ -13,16 +18,14 @@ export class HealthService {
     };
   }
 
-  getReadinessStatus() {
-    // 这里可以检查数据库连接、外部服务等
-    const isReady = this.checkDependencies();
+  async getReadinessStatus() {
+    const redisOk = await this.checkDependencies();
 
     return {
-      status: isReady ? 'ready' : 'not ready',
+      status: redisOk ? 'ready' : 'not ready',
       timestamp: new Date().toISOString(),
       checks: {
-        database: 'ok', // 可以添加实际的数据库检查
-        // 其他依赖检查
+        redis: redisOk ? 'connected' : 'disconnected',
       },
     };
   }
@@ -36,9 +39,12 @@ export class HealthService {
     };
   }
 
-  private checkDependencies(): boolean {
-    // 实现依赖检查逻辑
-    // 例如：检查数据库连接、Redis连接等
-    return true;
+  private async checkDependencies(): Promise<boolean> {
+    try {
+      return await this.redisService.isHealthy();
+    } catch (e) {
+      this.logger.error('Dependency check failed', e);
+      return false;
+    }
   }
 }

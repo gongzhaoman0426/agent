@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis';
 import {
   VectorStoreIndex,
   LlamaParseReader,
@@ -24,7 +25,10 @@ export class KnowledgeBaseService {
   private uploadDir: string;
   private logger = new Logger(KnowledgeBaseService.name);
 
-  constructor(private prisma: PrismaService) {
+  constructor(
+    private prisma: PrismaService,
+    private readonly redis: RedisService,
+  ) {
     this.uploadDir = path.join(process.cwd(), 'uploads');
     this.ensureUploadDirectory();
   }
@@ -74,13 +78,20 @@ export class KnowledgeBaseService {
   }
 
   async getAllKnowledgeBases(userId?: string) {
-    const whereClause = userId ? { createdById: userId } : {};
-    return this.prisma.knowledgeBase.findMany({
-      where: whereClause,
-      include: {
-        files: true,
+    const cacheKey = userId ? `user:${userId}:knowledge-bases` : 'knowledge-bases:all';
+    return this.redis.getOrSet(
+      cacheKey,
+      () => {
+        const whereClause = userId ? { createdById: userId } : {};
+        return this.prisma.knowledgeBase.findMany({
+          where: whereClause,
+          include: {
+            files: true,
+          },
+        });
       },
-    });
+      300,
+    );
   }
 
   async getAgentKnowledgeBases(agentId: string) {
@@ -93,12 +104,16 @@ export class KnowledgeBaseService {
   }
 
   async getKnowledgeBase(userId: string | undefined, knowledgeBaseId: string) {
-    const knowledgeBase = await this.prisma.knowledgeBase.findUnique({
-      where: { id: knowledgeBaseId },
-      include: {
-        files: true,
-      },
-    });
+    const knowledgeBase = await this.redis.getOrSet(
+      `kb:${knowledgeBaseId}`,
+      () => this.prisma.knowledgeBase.findUnique({
+        where: { id: knowledgeBaseId },
+        include: {
+          files: true,
+        },
+      }),
+      3600,
+    );
 
     if (!knowledgeBase) {
       throw new NotFoundException(`Knowledge base with ID ${knowledgeBaseId} not found`);
@@ -137,6 +152,10 @@ export class KnowledgeBaseService {
       where: { id: knowledgeBaseId },
       data: updateKnowledgeBaseDto,
     });
+
+    // 失效缓存
+    await this.redis.del(`kb:${knowledgeBaseId}`);
+    if (userId) await this.redis.del(`user:${userId}:knowledge-bases`);
   }
 
   async createKnowledgeBase(userId: string | undefined, name: string, description: string) {
@@ -151,6 +170,9 @@ export class KnowledgeBaseService {
     });
 
     await this.createVectorStore(vectorStoreName);
+
+    // 失效缓存
+    if (userId) await this.redis.del(`user:${userId}:knowledge-bases`);
 
     return knowledgeBase;
   }
@@ -182,6 +204,10 @@ export class KnowledgeBaseService {
     });
 
     await this.prisma.knowledgeBase.delete({ where: { id: knowledgeBaseId } });
+
+    // 失效缓存
+    await this.redis.del(`kb:${knowledgeBaseId}`);
+    if (userId) await this.redis.del(`user:${userId}:knowledge-bases`);
 
     try {
       const vectorStore = await this.createVectorStore(
