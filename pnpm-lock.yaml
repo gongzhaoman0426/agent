@@ -10,6 +10,9 @@ importers:
 
   apps/agent-api:
     dependencies:
+      '@llamaindex/anthropic':
+        specifier: ^0.3.26
+        version: 0.3.26(@llamaindex/core@0.6.21)(@llamaindex/env@0.1.30)
       '@llamaindex/openai':
         specifier: ^0.4.3
         version: 0.4.22(@llamaindex/core@0.6.21)(@llamaindex/env@0.1.30)(zod@3.25.76)
@@ -312,6 +315,10 @@ packages:
   '@angular-devkit/schematics@17.3.11':
     resolution: {integrity: sha512-I5wviiIqiFwar9Pdk30Lujk8FczEEc18i22A5c6Z9lbmhPQdTroDnEQdsfXjy404wPe8H62s0I15o4pmMGfTYQ==}
     engines: {node: ^18.13.0 || >=20.9.0, npm: ^6.11.0 || ^7.5.6 || >=8.0.0, yarn: '>= 1.13.0'}
+
+  '@anthropic-ai/sdk@0.58.0':
+    resolution: {integrity: sha512-wF8w+LB0AlKVLYUQho0nbK0uDv0K5Cgb92dbh8213t4roilnQ9Tm6zndheIaUxQdoEAeb0uoOT+GkkoIkqD8+A==}
+    hasBin: true
 
   '@aws-crypto/sha256-js@5.2.0':
     resolution: {integrity: sha512-FFQQyu7edu4ufvIZ+OadFpHHOt+eSTBaYaki44c+akjg7qZg9oOQeLlk77F6tSYqjDAFClrHJk9tMf0HdVyOvA==}
@@ -1025,6 +1032,12 @@ packages:
         optional: true
       zod:
         optional: true
+
+  '@llamaindex/anthropic@0.3.26':
+    resolution: {integrity: sha512-3rVC555MzpxrVSJs7WgpnocQGPQAPj2hqbyGCLcUdAfYQPXM5hq8ocq8ENxY9u1twijP9t/nOu+dliiJvS7brA==}
+    peerDependencies:
+      '@llamaindex/core': 0.6.22
+      '@llamaindex/env': 0.1.30
 
   '@llamaindex/cloud@4.1.3':
     resolution: {integrity: sha512-O4MgnYMDwSBYhmYAz067Xn8+QKb/QPJnyOqdRzY5qr6pV4jaygcvSM4XkUDyQLR0Vgxzi1waPsvUPBwWbP3l4Q==}
@@ -4676,6 +4689,9 @@ packages:
     resolution: {integrity: sha512-dYqgNSZbDwkaJ2ceRd9ojCGjBq+mOm9LmtXnAnEGyHhN/5R7iDW2TRw3h+o/jCFxus3P2LfWIIiwowAjANm7IA==}
     engines: {node: '>= 0.4'}
 
+  remeda@2.33.6:
+    resolution: {integrity: sha512-tazDGH7s75kUPGBKLvhgBEHMgW+TdDFhjUAMdQj57IoWz6HsGa5D2RX5yDUz6IIqiRRvZiaEHzCzWdTeixc/Kg==}
+
   repeat-string@1.6.1:
     resolution: {integrity: sha512-PV0dzCYDNfRi1jCDbJzpW7jNNDRuCOG/jI5ctQcGKt/clZD+YcPS3yIlWuTJMmESC8aevCFmWJy5wjAFgNqN6w==}
     engines: {node: '>=0.10'}
@@ -5544,6 +5560,8 @@ snapshots:
     transitivePeerDependencies:
       - chokidar
 
+  '@anthropic-ai/sdk@0.58.0': {}
+
   '@aws-crypto/sha256-js@5.2.0':
     dependencies:
       '@aws-crypto/util': 5.2.0
@@ -6308,6 +6326,13 @@ snapshots:
       p-retry: 6.2.1
       rxjs: 7.8.2
       zod: 3.25.76
+
+  '@llamaindex/anthropic@0.3.26(@llamaindex/core@0.6.21)(@llamaindex/env@0.1.30)':
+    dependencies:
+      '@anthropic-ai/sdk': 0.58.0
+      '@llamaindex/core': 0.6.21
+      '@llamaindex/env': 0.1.30
+      remeda: 2.33.6
 
   '@llamaindex/cloud@4.1.3(@llama-flow/core@0.4.4(p-retry@6.2.1)(rxjs@7.8.2)(zod@3.25.76))(@llamaindex/core@0.6.21)(@llamaindex/env@0.1.30)':
     dependencies:
@@ -10345,6 +10370,8 @@ snapshots:
       get-proto: 1.0.1
       gopd: 1.2.0
       set-function-name: 2.0.2
+
+  remeda@2.33.6: {}
 
   repeat-string@1.6.1: {}
 

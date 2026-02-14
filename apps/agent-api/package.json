@@ -25,6 +25,7 @@
     "db:reset": "prisma migrate reset --schema=./prisma/schema.prisma --force && pnpm run db:seed"
   },
   "dependencies": {
+    "@llamaindex/anthropic": "^0.3.26",
     "@llamaindex/openai": "^0.4.3",
     "@llamaindex/postgres": "^0.0.65",
     "@llamaindex/workflow": "^1.1.7",

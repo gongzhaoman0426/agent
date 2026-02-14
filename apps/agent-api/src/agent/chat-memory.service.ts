@@ -1,7 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { VectorStoreIndex, Settings } from 'llamaindex';
-import { OpenAIEmbedding, openai } from '@llamaindex/openai';
+import { OpenAIEmbedding } from '@llamaindex/openai';
+import { anthropic, AnthropicSession } from '@llamaindex/anthropic';
 import { PGVectorStore } from '@llamaindex/postgres';
 import { TextNode } from 'llamaindex';
 
@@ -26,13 +27,15 @@ export class ChatMemoryService {
       model: 'text-embedding-3-small',
       dimensions: 1536,
     });
-    Settings.llm = openai({
-      model: 'gpt-4o',
+    const session = new AnthropicSession({
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      ...(process.env.ANTHROPIC_BASE_URL && { baseURL: process.env.ANTHROPIC_BASE_URL }),
+    });
+    Settings.llm = anthropic({
+      model: 'claude-sonnet-4.6',
       temperature: 0.7,
-      apiKey: process.env.OPENAI_API_KEY,
-      additionalSessionOptions: {
-        baseURL: process.env.OPENAI_BASE_URL,
-      },
+      apiKey: process.env.ANTHROPIC_API_KEY,
+      session,
     });
   }
 
