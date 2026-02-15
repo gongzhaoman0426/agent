@@ -6,8 +6,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev:api": "pnpm --filter agent-api dev",
-    "dev:web": "pnpm --filter agent-web dev",
+    "dev": "pnpm --filter agent-api dev & pnpm --filter agent-web dev",
     "build": "pnpm --filter agent-api build && pnpm --filter agent-web build",
     "typecheck": "pnpm --filter agent-api typecheck && pnpm --filter agent-web typecheck",
     "lint": "pnpm --filter agent-api lint && pnpm --filter agent-web lint",
