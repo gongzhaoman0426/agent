@@ -88,13 +88,13 @@ export class ToolkitsService implements OnModuleInit {
           where: { name: tool.metadata.name },
           update: {
             description: tool.metadata.description,
-            schema: tool.metadata.parameters,
+            schema: tool.metadata.parameters as any,
             toolkitId: toolkit.id,
           },
           create: {
             name: tool.metadata.name,
             description: tool.metadata.description,
-            schema: tool.metadata.parameters,
+            schema: tool.metadata.parameters as any,
             toolkitId: toolkit.id,
           },
         });
