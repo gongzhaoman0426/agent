@@ -242,18 +242,33 @@ enum FileStatus {
 }
 
 model ChatSession {
-  id        String        @id @default(cuid())
-  title     String        @default("新对话")
+  id        String           @id @default(cuid())
+  title     String           @default("新对话")
   agentId   String
   agentName String
   userId    String?
-  agent     Agent         @relation(fields: [agentId], references: [id])
+  agent     Agent            @relation(fields: [agentId], references: [id])
   messages  ChatMessage[]
-  createdAt DateTime      @default(now())
-  updatedAt DateTime      @updatedAt
-  deleted   Boolean       @default(false)
+  summaries SessionSummary[]
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+  deleted   Boolean          @default(false)
 
   @@map("chat_sessions")
+}
+
+model SessionSummary {
+  id        String      @id @default(cuid())
+  sessionId String
+  session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  agentId   String
+  content   String
+  turnStart Int
+  turnEnd   Int
+  createdAt DateTime    @default(now())
+  updatedAt DateTime    @updatedAt
+
+  @@map("session_summaries")
 }
 
 model ChatMessage {
