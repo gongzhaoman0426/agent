@@ -78,6 +78,14 @@ export class LlamaindexService implements OnModuleInit {
         { role: 'user' as const, content: message },
       ],
     });
-    return response.message.content as string;
+    const content = response.message.content;
+    if (typeof content === 'string') return content;
+    if (Array.isArray(content)) {
+      return content
+        .filter((block: any) => block.type === 'text')
+        .map((block: any) => block.text)
+        .join('');
+    }
+    return String(content);
   }
 }
