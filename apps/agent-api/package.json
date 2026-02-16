@@ -47,6 +47,7 @@
     "dayjs": "^1.11.13",
     "https-proxy-agent": "^7.0.6",
     "ioredis": "^5.9.3",
+    "js-tiktoken": "^1.0.21",
     "llamaindex": "^0.11.6",
     "pgvector": "0.2.0",
     "reflect-metadata": "^0.2.2",

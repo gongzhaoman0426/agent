@@ -19,12 +19,42 @@ interface MemoryResult {
 
 /** 时间衰减系数，每小时衰减率 */
 const TIME_DECAY_LAMBDA = 0.005;
-/** 摘要条数上限，超过则合并最老的 3 条 */
-const MAX_SUMMARIES = 8;
-/** 未压缩轮次达到此值时触发压缩 */
-const COMPACTION_THRESHOLD = 10;
-/** 每次压缩的轮次数 */
-const COMPACTION_TURNS = 5;
+/** 未压缩消息 token 超过此值触发压缩 */
+const TOKEN_COMPACTION_THRESHOLD = 4000;
+/** 压缩后目标保留的 token 数 */
+const TOKEN_COMPACTION_TARGET = 2000;
+/** 摘要总 token 超过此值触发合并 */
+const MAX_SUMMARY_TOKENS = 2000;
+/** 压缩后至少保留的轮次数 */
+const MIN_KEEP_TURNS = 5;
+
+// ─── Token 估算工具 ───
+
+// js-tiktoken 是 ESM 模块，需要动态导入
+let _encoder: any = null;
+let _getEncoding: any = null;
+
+async function ensureEncoder(): Promise<void> {
+  if (!_encoder) {
+    if (!_getEncoding) {
+      const mod = await import('js-tiktoken');
+      _getEncoding = mod.getEncoding;
+    }
+    _encoder = _getEncoding('cl100k_base');
+  }
+}
+
+/** 估算单段文本的 token 数（基于 cl100k_base，与 Claude tokenizer 误差 ~5-10%） */
+async function estimateTokens(text: string): Promise<number> {
+  await ensureEncoder();
+  return _encoder.encode(text).length;
+}
+
+/** 估算消息数组的总 token 数 */
+async function estimateMessagesTokens(messages: ChatMessageItem[]): Promise<number> {
+  await ensureEncoder();
+  return messages.reduce((sum, m) => sum + _encoder.encode(m.content).length, 0);
+}
 
 @Injectable()
 export class ChatMemoryService {
@@ -117,6 +147,34 @@ ${block}
     return this.llamaIndexService.chat(prompt, '你是一个专业的对话摘要助手，擅长合并多段摘要并保留关键信息。');
   }
 
+  /**
+   * 计算需要压缩的轮次数：从最老消息开始累加 token，直到剩余可压缩 token <= target
+   * 入参 compressibleMessages 已排除最近 MIN_KEEP_TURNS 轮，compressibleTokens 是其总 token
+   */
+  private async calculateTurnsToCompress(
+    compressibleMessages: ChatMessageItem[],
+    compressibleTokens: number,
+    targetTokens: number,
+  ): Promise<number> {
+    let accumulated = 0;
+    let turns = 0;
+    const totalTurns = Math.floor(compressibleMessages.length / 2);
+
+    for (let i = 0; i < totalTurns; i++) {
+      const userMsg = compressibleMessages[i * 2];
+      const assistantMsg = compressibleMessages[i * 2 + 1];
+      if (!userMsg || !assistantMsg) break;
+      accumulated += await estimateTokens(userMsg.content) + await estimateTokens(assistantMsg.content);
+      turns++;
+
+      if (compressibleTokens - accumulated <= targetTokens) {
+        break;
+      }
+    }
+
+    return Math.max(turns, 1);
+  }
+
   // ─── 核心方法 ───
 
   /**
@@ -142,17 +200,28 @@ ${block}
       ? summaries[summaries.length - 1].turnEnd + 1
       : 0;
 
-    // 3. 提取未摘要的消息
+    // 3. 提取未摘要的消息，分为可压缩部分和保留部分（最近 MIN_KEEP_TURNS 轮）
     const unsummarizedMessages = fullHistory.slice(summarizedTurnCount * 2);
     const unsummarizedTurns = Math.floor(unsummarizedMessages.length / 2);
-    this.logger.log(`[processMemory] 已摘要轮次=${summarizedTurnCount}, 未摘要轮次=${unsummarizedTurns}, 摘要条数=${summaries.length}`);
+
+    // 可压缩部分 = 排除最近 MIN_KEEP_TURNS 轮之后的消息
+    const compressibleCount = Math.max(unsummarizedTurns - MIN_KEEP_TURNS, 0);
+    const compressibleMessages = unsummarizedMessages.slice(0, compressibleCount * 2);
+    const keptMessages = unsummarizedMessages.slice(compressibleCount * 2);
+    const compressibleTokens = await estimateMessagesTokens(compressibleMessages);
+    this.logger.log(`[processMemory] 已摘要轮次=${summarizedTurnCount}, 未摘要轮次=${unsummarizedTurns}, 可压缩轮次=${compressibleCount}, 可压缩tokens=${compressibleTokens}, 摘要条数=${summaries.length}`);
 
     let recentHistory: ChatMessageItem[];
 
-    // 4. 对话轮次压缩（达到 10 轮触发）
-    if (unsummarizedTurns >= COMPACTION_THRESHOLD) {
-      const messagesToSummarize = unsummarizedMessages.slice(0, COMPACTION_TURNS * 2);
-      const remainingMessages = unsummarizedMessages.slice(COMPACTION_TURNS * 2);
+    // 4. 基于 token 数量的对话压缩（可压缩部分 token 超过阈值时触发）
+    if (compressibleTokens >= TOKEN_COMPACTION_THRESHOLD && compressibleCount > 0) {
+      const turnsToCompress = await this.calculateTurnsToCompress(
+        compressibleMessages,
+        compressibleTokens,
+        TOKEN_COMPACTION_TARGET,
+      );
+      const messagesToSummarize = compressibleMessages.slice(0, turnsToCompress * 2);
+      const remainingCompressible = compressibleMessages.slice(turnsToCompress * 2);
 
       try {
         const summaryText = await this.summarizeTurns(messagesToSummarize);
@@ -162,11 +231,12 @@ ${block}
             agentId,
             content: summaryText,
             turnStart: summarizedTurnCount,
-            turnEnd: summarizedTurnCount + COMPACTION_TURNS - 1,
+            turnEnd: summarizedTurnCount + turnsToCompress - 1,
           },
         });
-        this.logger.log(`[processMemory] 压缩完成: 轮次 ${summarizedTurnCount}-${summarizedTurnCount + COMPACTION_TURNS - 1} → 1 条摘要`);
-        recentHistory = remainingMessages;
+        const compressedTokens = compressibleTokens - await estimateMessagesTokens(remainingCompressible);
+        this.logger.log(`[processMemory] 压缩完成: 轮次 ${summarizedTurnCount}-${summarizedTurnCount + turnsToCompress - 1} (${turnsToCompress} 轮, ~${compressedTokens} tokens) → 1 条摘要`);
+        recentHistory = [...remainingCompressible, ...keptMessages];
 
         // 重新查询摘要列表
         summaries = await this.prisma.sessionSummary.findMany({
@@ -181,8 +251,12 @@ ${block}
       recentHistory = unsummarizedMessages;
     }
 
-    // 5. 摘要合并（超过 8 条触发，最老 3 条 → 1 条）
-    if (summaries.length > MAX_SUMMARIES) {
+    // 5. 基于 token 数量的摘要合并（摘要总 token 超过阈值时，最老 3 条 → 1 条）
+    let totalSummaryTokens = 0;
+    for (const s of summaries) {
+      totalSummaryTokens += await estimateTokens(s.content);
+    }
+    if (totalSummaryTokens > MAX_SUMMARY_TOKENS && summaries.length >= 3) {
       const oldest3 = summaries.slice(0, 3);
       try {
         const mergedText = await this.mergeSummaries(oldest3.map((s) => s.content));
@@ -201,7 +275,7 @@ ${block}
             },
           }),
         ]);
-        this.logger.log(`[processMemory] 摘要合并: ${oldest3.length} 条 → 1 条 (轮次 ${oldest3[0].turnStart}-${oldest3[2].turnEnd})`);
+        this.logger.log(`[processMemory] 摘要合并: ${oldest3.length} 条 → 1 条 (轮次 ${oldest3[0].turnStart}-${oldest3[2].turnEnd}, ${totalSummaryTokens} tokens → ~${await estimateTokens(mergedText)} tokens)`);
 
         // 重新查询
         summaries = await this.prisma.sessionSummary.findMany({
@@ -245,7 +319,10 @@ ${block}
     }
 
     const enhancedPrompt = contextParts.join('');
-    this.logger.log(`[processMemory] prompt 长度: 原始=${systemPrompt.length}, 增强后=${enhancedPrompt.length}, recentHistory=${recentHistory.length} 条`);
+    const promptTokens = await estimateTokens(systemPrompt);
+    const enhancedTokens = await estimateTokens(enhancedPrompt);
+    const recentTokens = await estimateMessagesTokens(recentHistory);
+    this.logger.log(`[processMemory] prompt: 原始=${systemPrompt.length}字/${promptTokens}tokens, 增强后=${enhancedPrompt.length}字/${enhancedTokens}tokens, recentHistory=${recentHistory.length}条/${recentTokens}tokens`);
 
     return { enhancedPrompt, recentHistory };
   }
