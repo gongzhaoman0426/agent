@@ -132,6 +132,7 @@ export class ScheduledTaskToolkit extends BaseToolkit {
         userPrompt: params.userPrompt,
         agentId: params.agentId || this.agentId,
         userId: this.userId,
+        sessionId: this.sessionId,
       });
       return JSON.stringify({
         success: true,

@@ -14,6 +14,7 @@ export abstract class BaseToolkit implements Toolkit {
   // agentId / userId 独立存储，不再混在 settings 中
   protected agentId: string = '';
   protected userId: string = '';
+  protected sessionId: string = '';
   protected readonly logger = new Logger(this.constructor.name);
 
   protected llamaindexService = new LlamaindexService()
@@ -40,9 +41,10 @@ export abstract class BaseToolkit implements Toolkit {
     }
   }
 
-  setAgentContext(agentId: string, userId?: string): void {
+  setAgentContext(agentId: string, userId?: string, sessionId?: string): void {
     this.agentId = agentId;
     if (userId) this.userId = userId;
+    if (sessionId) this.sessionId = sessionId;
   }
 
   applySettings(settings: Settings): void {

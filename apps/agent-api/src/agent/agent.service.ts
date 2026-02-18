@@ -426,7 +426,7 @@ export class AgentService {
     }));
 
     // 获取智能体的工具
-    const tools = await this.toolsService.getAgentTools(agentId);
+    const tools = await this.toolsService.getAgentTools(agentId, chatDto.sessionId);
     this.logger.log(`[Chat] Available tools: ${tools.map((t: any) => t.metadata?.name || t.name).join(', ')}`);
 
     // 处理聊天记忆：裁剪历史 + RAG 检索 + 增强 prompt
@@ -548,7 +548,7 @@ export class AgentService {
     }));
 
     // 获取智能体的工具
-    const tools = await this.toolsService.getAgentTools(agentId);
+    const tools = await this.toolsService.getAgentTools(agentId, chatDto.sessionId);
     this.logger.log(`[ChatStream] Available tools: ${tools.map((t: any) => t.metadata?.name || t.name).join(', ')}`);
 
     // 处理聊天记忆

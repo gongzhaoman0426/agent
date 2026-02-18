@@ -23,6 +23,16 @@ export class ScheduledTaskService implements OnModuleInit {
     return this.moduleRef.get(AgentService, { strict: false });
   }
 
+  private async getLlamaindexService() {
+    const { LlamaindexService } = require('../llamaindex/llamaindex.service');
+    return this.moduleRef.get(LlamaindexService, { strict: false });
+  }
+
+  private async getToolsService() {
+    const { ToolsService } = require('../tool/tools.service');
+    return this.moduleRef.get(ToolsService, { strict: false });
+  }
+
   private async loadAllTasks() {
     const tasks = await this.prisma.scheduledTask.findMany({
       where: { enabled: true },
@@ -68,14 +78,28 @@ export class ScheduledTaskService implements OnModuleInit {
 
     try {
       const agentService = await this.getAgentService();
-      const sessionId = `scheduled-${taskId}-${Date.now()}`;
-      const result = await agentService.chatWithAgent(
-        task.agentId,
-        { message: task.userPrompt, sessionId },
-        task.userId,
-      );
+      const llamaindexService = await this.getLlamaindexService();
+      const toolsService = await this.getToolsService();
 
-      const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
+      // 获取 agent 配置和工具
+      const agent = await agentService.findOne(task.agentId);
+      const tools = await toolsService.getAgentTools(task.agentId);
+
+      // 直接创建 agent 实例执行，不走 chatWithAgent
+      const agentInstance = await llamaindexService.createAgent(tools, agent.prompt);
+      const response = await agentInstance.run(task.userPrompt);
+      const resultStr = response.data.result;
+
+      // 将 agent 回复存入创建任务时的 session（只存 assistant 消息，不存 userPrompt）
+      await this.prisma.chatMessage.create({
+        data: {
+          role: 'assistant',
+          content: resultStr,
+          sessionId: task.sessionId,
+        },
+      });
+
+      // 更新定时任务的 lastResult
       await this.prisma.scheduledTask.update({
         where: { id: taskId },
         data: { lastRunAt: new Date(), lastResult: resultStr.substring(0, 4000) },
@@ -97,6 +121,7 @@ export class ScheduledTaskService implements OnModuleInit {
     userPrompt: string;
     agentId: string;
     userId: string;
+    sessionId: string;
   }) {
     const task = await this.prisma.scheduledTask.create({ data });
     this.registerCronJob(task);

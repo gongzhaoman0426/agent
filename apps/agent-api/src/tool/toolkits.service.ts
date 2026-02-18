@@ -146,7 +146,7 @@ export class ToolkitsService implements OnModuleInit {
     }
   }
 
-  async getToolkitInstance(toolkitId: string, settings: any, agentId: string, userId?: string): Promise<Toolkit> {
+  async getToolkitInstance(toolkitId: string, settings: any, agentId: string, userId?: string, sessionId?: string): Promise<Toolkit> {
     const ToolkitClass = this.getToolkitClass(toolkitId);
     if (!ToolkitClass) {
       throw new Error(`Unknown toolkit type: ${toolkitId}`);
@@ -154,7 +154,7 @@ export class ToolkitsService implements OnModuleInit {
 
     const toolkitInstance = await this.moduleRef.get(ToolkitClass);
     await toolkitInstance.applySettings(settings);
-    toolkitInstance.setAgentContext(agentId, userId);
+    toolkitInstance.setAgentContext(agentId, userId, sessionId);
 
     return toolkitInstance;
   }
@@ -163,7 +163,7 @@ export class ToolkitsService implements OnModuleInit {
     return this.toolkitMap.get(id);
   }
 
-  async getAgentToolkitInstances(agentId: string): Promise<Toolkit[]> {
+  async getAgentToolkitInstances(agentId: string, sessionId?: string): Promise<Toolkit[]> {
     const agentToolkits = await this.redis.getOrSet(
       `agent:${agentId}:toolkit-assignments`,
       () => this.prismaService.agentToolkit.findMany({
@@ -209,6 +209,7 @@ export class ToolkitsService implements OnModuleInit {
           userSettingsMap[at.toolkitId] || {},
           agentId,
           userId || undefined,
+          sessionId,
         ),
       ),
     );

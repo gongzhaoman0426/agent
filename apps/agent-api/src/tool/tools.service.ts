@@ -14,11 +14,11 @@ export class ToolsService {
     private readonly redis: RedisService,
   ) {}
 
-  async getAgentTools(agentId: string): Promise<any[]> {
+  async getAgentTools(agentId: string, sessionId?: string): Promise<any[]> {
     const tools: any[] = [];
 
     const agentToolkitInstances =
-      await this.toolkitsService.getAgentToolkitInstances(agentId);
+      await this.toolkitsService.getAgentToolkitInstances(agentId, sessionId);
     for (const agentToolkitInstance of agentToolkitInstances) {
       tools.push(...(await agentToolkitInstance.getTools()));
     }

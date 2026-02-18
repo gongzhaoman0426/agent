@@ -289,6 +289,7 @@ model ScheduledTask {
   userPrompt String    @map("user_prompt")
   agentId    String
   userId     String
+  sessionId  String
   enabled    Boolean   @default(true)
   lastRunAt  DateTime?
   lastResult String?
