@@ -1,5 +1,3 @@
-import { FunctionTool } from 'llamaindex';
-
 import { toolkitId } from '../toolkits.decorator';
 import { BaseToolkit } from './base-toolkit';
 import { ToolsType } from '../interface/toolkit';
@@ -62,7 +60,6 @@ export class FeishuBitableToolkit extends BaseToolkit {
     }
 
     this.cachedToken = data.tenant_access_token;
-    // Expire 5 minutes early to be safe
     this.tokenExpiresAt = now + (data.expire! - 300) * 1000;
     return this.cachedToken;
   }
@@ -107,50 +104,12 @@ export class FeishuBitableToolkit extends BaseToolkit {
     return `/apps/${this.settings.appToken}/tables/${tid}`;
   }
 
-  async getTools(): Promise<ToolsType[]> {
-    if (this.tools.length > 0) {
-      return this.tools;
-    }
+  protected async initTools(): Promise<void> {
+    const llamaindexModules = await this.llamaindexService.getLlamaindexModules();
+    const FunctionTool = llamaindexModules.FunctionTool;
 
     this.tools = [
-      this.buildListTablesTool(),
-      this.buildListFieldsTool(),
-      this.buildCreateFieldTool(),
-      this.buildUpdateFieldTool(),
-      this.buildDeleteFieldTool(),
-      this.buildSearchRecordsTool(),
-      this.buildCreateRecordTool(),
-      this.buildUpdateRecordTool(),
-      this.buildDeleteRecordTool(),
-    ];
-
-    return this.tools;
-  }
-
-  private buildListTablesTool(): ToolsType {
-    return FunctionTool.from(
-      async (params: { page_size?: number; page_token?: string }) => {
-        try {
-          const query: Record<string, string | number | boolean> = {};
-          if (params.page_size) query.page_size = params.page_size;
-          if (params.page_token) query.page_token = params.page_token;
-
-          const result = await this.request(
-            `/apps/${this.settings.appToken}/tables`,
-            'GET',
-            undefined,
-            query,
-          );
-          return JSON.stringify(result, null, 2);
-        } catch (error: any) {
-          this.logger.error(
-            `[Tool:listTables] Error: ${error.message}`,
-            error.stack,
-          );
-          return JSON.stringify({ error: error.message });
-        }
-      },
-      {
+      FunctionTool.from(this.listTables.bind(this), {
         name: 'listTables',
         description:
           '列出飞书多维表格应用中的所有数据表，返回表名和表ID。当需要了解有哪些数据表或需要操作非默认表时使用。',
@@ -168,38 +127,8 @@ export class FeishuBitableToolkit extends BaseToolkit {
           },
           required: [],
         },
-      } as any,
-    );
-  }
-
-  private buildListFieldsTool(): ToolsType {
-    return FunctionTool.from(
-      async (params: {
-        table_id?: string;
-        page_size?: number;
-        page_token?: string;
-      }) => {
-        try {
-          const query: Record<string, string | number | boolean> = {};
-          if (params.page_size) query.page_size = params.page_size;
-          if (params.page_token) query.page_token = params.page_token;
-
-          const result = await this.request(
-            `${this.getTablePath(params.table_id)}/fields`,
-            'GET',
-            undefined,
-            query,
-          );
-          return JSON.stringify(result, null, 2);
-        } catch (error: any) {
-          this.logger.error(
-            `[Tool:listFields] Error: ${error.message}`,
-            error.stack,
-          );
-          return JSON.stringify({ error: error.message });
-        }
-      },
-      {
+      }),
+      FunctionTool.from(this.listFields.bind(this), {
         name: 'listFields',
         description:
           '获取飞书多维表格中指定数据表的所有字段信息，包括字段名称、类型和配置。在创建或更新记录前，应先调用此工具了解表结构。',
@@ -208,8 +137,7 @@ export class FeishuBitableToolkit extends BaseToolkit {
           properties: {
             table_id: {
               type: 'string',
-              description:
-                '数据表ID。如果不提供，则使用默认配置的数据表',
+              description: '数据表ID。如果不提供，则使用默认配置的数据表',
             },
             page_size: {
               type: 'number',
@@ -222,40 +150,8 @@ export class FeishuBitableToolkit extends BaseToolkit {
           },
           required: [],
         },
-      } as any,
-    );
-  }
-
-  private buildCreateFieldTool(): ToolsType {
-    return FunctionTool.from(
-      async (params: {
-        table_id?: string;
-        field_name: string;
-        type: number;
-        property?: Record<string, any>;
-      }) => {
-        try {
-          const body: Record<string, any> = {
-            field_name: params.field_name,
-            type: params.type,
-          };
-          if (params.property) body.property = params.property;
-
-          const result = await this.request(
-            `${this.getTablePath(params.table_id)}/fields`,
-            'POST',
-            body,
-          );
-          return JSON.stringify(result, null, 2);
-        } catch (error: any) {
-          this.logger.error(
-            `[Tool:createField] Error: ${error.message}`,
-            error.stack,
-          );
-          return JSON.stringify({ error: error.message });
-        }
-      },
-      {
+      }),
+      FunctionTool.from(this.createField.bind(this), {
         name: 'createField',
         description:
           '在飞书多维表格中新增一个字段（列）。常用字段类型：1=文本, 2=数字, 3=单选, 4=多选, 5=日期, 7=复选框, 11=人员, 13=电话, 15=超链接, 17=附件, 22=地理位置',
@@ -264,8 +160,7 @@ export class FeishuBitableToolkit extends BaseToolkit {
           properties: {
             table_id: {
               type: 'string',
-              description:
-                '数据表ID。如果不提供，则使用默认配置的数据表',
+              description: '数据表ID。如果不提供，则使用默认配置的数据表',
             },
             field_name: {
               type: 'string',
@@ -284,40 +179,8 @@ export class FeishuBitableToolkit extends BaseToolkit {
           },
           required: ['field_name', 'type'],
         },
-      } as any,
-    );
-  }
-
-  private buildUpdateFieldTool(): ToolsType {
-    return FunctionTool.from(
-      async (params: {
-        table_id?: string;
-        field_id: string;
-        field_name?: string;
-        type?: number;
-        property?: Record<string, any>;
-      }) => {
-        try {
-          const body: Record<string, any> = {};
-          if (params.field_name) body.field_name = params.field_name;
-          if (params.type !== undefined) body.type = params.type;
-          if (params.property) body.property = params.property;
-
-          const result = await this.request(
-            `${this.getTablePath(params.table_id)}/fields/${params.field_id}`,
-            'PUT',
-            body,
-          );
-          return JSON.stringify(result, null, 2);
-        } catch (error: any) {
-          this.logger.error(
-            `[Tool:updateField] Error: ${error.message}`,
-            error.stack,
-          );
-          return JSON.stringify({ error: error.message });
-        }
-      },
-      {
+      }),
+      FunctionTool.from(this.updateField.bind(this), {
         name: 'updateField',
         description:
           '修改飞书多维表格中的字段（列）属性，如重命名或修改配置。field_id 可通过 listFields 获取。',
@@ -326,13 +189,11 @@ export class FeishuBitableToolkit extends BaseToolkit {
           properties: {
             table_id: {
               type: 'string',
-              description:
-                '数据表ID。如果不提供，则使用默认配置的数据表',
+              description: '数据表ID。如果不提供，则使用默认配置的数据表',
             },
             field_id: {
               type: 'string',
-              description:
-                '要修改的字段ID，通过 listFields 获取',
+              description: '要修改的字段ID，通过 listFields 获取',
             },
             field_name: {
               type: 'string',
@@ -351,28 +212,8 @@ export class FeishuBitableToolkit extends BaseToolkit {
           },
           required: ['field_id'],
         },
-      } as any,
-    );
-  }
-
-  private buildDeleteFieldTool(): ToolsType {
-    return FunctionTool.from(
-      async (params: { table_id?: string; field_id: string }) => {
-        try {
-          const result = await this.request(
-            `${this.getTablePath(params.table_id)}/fields/${params.field_id}`,
-            'DELETE',
-          );
-          return JSON.stringify(result, null, 2);
-        } catch (error: any) {
-          this.logger.error(
-            `[Tool:deleteField] Error: ${error.message}`,
-            error.stack,
-          );
-          return JSON.stringify({ error: error.message });
-        }
-      },
-      {
+      }),
+      FunctionTool.from(this.deleteField.bind(this), {
         name: 'deleteField',
         description:
           '删除飞书多维表格中的一个字段（列）。此操作不可撤销，字段下的所有数据将被删除。field_id 可通过 listFields 获取。',
@@ -381,64 +222,17 @@ export class FeishuBitableToolkit extends BaseToolkit {
           properties: {
             table_id: {
               type: 'string',
-              description:
-                '数据表ID。如果不提供，则使用默认配置的数据表',
+              description: '数据表ID。如果不提供，则使用默认配置的数据表',
             },
             field_id: {
               type: 'string',
-              description:
-                '要删除的字段ID，通过 listFields 获取',
+              description: '要删除的字段ID，通过 listFields 获取',
             },
           },
           required: ['field_id'],
         },
-      } as any,
-    );
-  }
-
-  private buildSearchRecordsTool(): ToolsType {
-    return FunctionTool.from(
-      async (params: {
-        table_id?: string;
-        filter?: {
-          conjunction: 'and' | 'or';
-          conditions: Array<{
-            field_name: string;
-            operator: string;
-            value?: string[];
-          }>;
-        };
-        sort?: Array<{ field_name: string; desc?: boolean }>;
-        field_names?: string[];
-        automatic_fields?: boolean;
-        page_size?: number;
-        page_token?: string;
-      }) => {
-        try {
-          const body: Record<string, any> = {};
-          if (params.filter) body.filter = params.filter;
-          if (params.sort) body.sort = params.sort;
-          if (params.field_names) body.field_names = params.field_names;
-          if (params.automatic_fields !== undefined)
-            body.automatic_fields = params.automatic_fields;
-          if (params.page_size) body.page_size = params.page_size;
-          if (params.page_token) body.page_token = params.page_token;
-
-          const result = await this.request(
-            `${this.getTablePath(params.table_id)}/records/search`,
-            'POST',
-            body,
-          );
-          return JSON.stringify(result, null, 2);
-        } catch (error: any) {
-          this.logger.error(
-            `[Tool:searchRecords] Error: ${error.message}`,
-            error.stack,
-          );
-          return JSON.stringify({ error: error.message });
-        }
-      },
-      {
+      }),
+      FunctionTool.from(this.searchRecords.bind(this), {
         name: 'searchRecords',
         description:
           '查询飞书多维表格中的记录，支持结构化筛选条件、排序、字段选择和分页。筛选条件使用 filter 对象，包含 conjunction（and/or）和 conditions 数组。',
@@ -447,8 +241,7 @@ export class FeishuBitableToolkit extends BaseToolkit {
           properties: {
             table_id: {
               type: 'string',
-              description:
-                '数据表ID。如果不提供，则使用默认配置的数据表',
+              description: '数据表ID。如果不提供，则使用默认配置的数据表',
             },
             filter: {
               type: 'object',
@@ -520,8 +313,7 @@ export class FeishuBitableToolkit extends BaseToolkit {
             field_names: {
               type: 'array',
               items: { type: 'string' },
-              description:
-                '指定返回的字段名称列表，不提供则返回所有字段',
+              description: '指定返回的字段名称列表，不提供则返回所有字段',
             },
             automatic_fields: {
               type: 'boolean',
@@ -539,32 +331,8 @@ export class FeishuBitableToolkit extends BaseToolkit {
           },
           required: [],
         },
-      } as any,
-    );
-  }
-
-  private buildCreateRecordTool(): ToolsType {
-    return FunctionTool.from(
-      async (params: {
-        table_id?: string;
-        fields: Record<string, any>;
-      }) => {
-        try {
-          const result = await this.request(
-            `${this.getTablePath(params.table_id)}/records`,
-            'POST',
-            { fields: params.fields },
-          );
-          return JSON.stringify(result, null, 2);
-        } catch (error: any) {
-          this.logger.error(
-            `[Tool:createRecord] Error: ${error.message}`,
-            error.stack,
-          );
-          return JSON.stringify({ error: error.message });
-        }
-      },
-      {
+      }),
+      FunctionTool.from(this.createRecord.bind(this), {
         name: 'createRecord',
         description:
           '在飞书多维表格中新增一条记录。请先调用 listFields 了解表结构，确保字段名和值类型正确。',
@@ -573,8 +341,7 @@ export class FeishuBitableToolkit extends BaseToolkit {
           properties: {
             table_id: {
               type: 'string',
-              description:
-                '数据表ID。如果不提供，则使用默认配置的数据表',
+              description: '数据表ID。如果不提供，则使用默认配置的数据表',
             },
             fields: {
               type: 'object',
@@ -584,33 +351,8 @@ export class FeishuBitableToolkit extends BaseToolkit {
           },
           required: ['fields'],
         },
-      } as any,
-    );
-  }
-
-  private buildUpdateRecordTool(): ToolsType {
-    return FunctionTool.from(
-      async (params: {
-        table_id?: string;
-        record_id: string;
-        fields: Record<string, any>;
-      }) => {
-        try {
-          const result = await this.request(
-            `${this.getTablePath(params.table_id)}/records/${params.record_id}`,
-            'PUT',
-            { fields: params.fields },
-          );
-          return JSON.stringify(result, null, 2);
-        } catch (error: any) {
-          this.logger.error(
-            `[Tool:updateRecord] Error: ${error.message}`,
-            error.stack,
-          );
-          return JSON.stringify({ error: error.message });
-        }
-      },
-      {
+      }),
+      FunctionTool.from(this.updateRecord.bind(this), {
         name: 'updateRecord',
         description:
           '更新飞书多维表格中的一条记录。record_id 可通过 searchRecords 获取。只需提供要修改的字段。',
@@ -619,13 +361,11 @@ export class FeishuBitableToolkit extends BaseToolkit {
           properties: {
             table_id: {
               type: 'string',
-              description:
-                '数据表ID。如果不提供，则使用默认配置的数据表',
+              description: '数据表ID。如果不提供，则使用默认配置的数据表',
             },
             record_id: {
               type: 'string',
-              description:
-                '要更新的记录ID，通常从 searchRecords 的结果中获取',
+              description: '要更新的记录ID，通常从 searchRecords 的结果中获取',
             },
             fields: {
               type: 'object',
@@ -635,28 +375,8 @@ export class FeishuBitableToolkit extends BaseToolkit {
           },
           required: ['record_id', 'fields'],
         },
-      } as any,
-    );
-  }
-
-  private buildDeleteRecordTool(): ToolsType {
-    return FunctionTool.from(
-      async (params: { table_id?: string; record_id: string }) => {
-        try {
-          const result = await this.request(
-            `${this.getTablePath(params.table_id)}/records/${params.record_id}`,
-            'DELETE',
-          );
-          return JSON.stringify(result, null, 2);
-        } catch (error: any) {
-          this.logger.error(
-            `[Tool:deleteRecord] Error: ${error.message}`,
-            error.stack,
-          );
-          return JSON.stringify({ error: error.message });
-        }
-      },
-      {
+      }),
+      FunctionTool.from(this.deleteRecord.bind(this), {
         name: 'deleteRecord',
         description:
           '删除飞书多维表格中的一条记录。此操作不可撤销，请谨慎使用。record_id 可通过 searchRecords 获取。',
@@ -665,18 +385,207 @@ export class FeishuBitableToolkit extends BaseToolkit {
           properties: {
             table_id: {
               type: 'string',
-              description:
-                '数据表ID。如果不提供，则使用默认配置的数据表',
+              description: '数据表ID。如果不提供，则使用默认配置的数据表',
             },
             record_id: {
               type: 'string',
-              description:
-                '要删除的记录ID，通常从 searchRecords 的结果中获取',
+              description: '要删除的记录ID，通常从 searchRecords 的结果中获取',
             },
           },
           required: ['record_id'],
         },
-      } as any,
-    );
+      }),
+    ];
+  }
+
+  async listTables(params: { page_size?: number; page_token?: string }): Promise<string> {
+    try {
+      const query: Record<string, string | number | boolean> = {};
+      if (params.page_size) query.page_size = params.page_size;
+      if (params.page_token) query.page_token = params.page_token;
+
+      const result = await this.request(
+        `/apps/${this.settings.appToken}/tables`,
+        'GET',
+        undefined,
+        query,
+      );
+      return JSON.stringify(result, null, 2);
+    } catch (error: any) {
+      this.logger.error(`[Tool:listTables] Error: ${error.message}`, error.stack);
+      return JSON.stringify({ error: error.message });
+    }
+  }
+
+  async listFields(params: {
+    table_id?: string;
+    page_size?: number;
+    page_token?: string;
+  }): Promise<string> {
+    try {
+      const query: Record<string, string | number | boolean> = {};
+      if (params.page_size) query.page_size = params.page_size;
+      if (params.page_token) query.page_token = params.page_token;
+
+      const result = await this.request(
+        `${this.getTablePath(params.table_id)}/fields`,
+        'GET',
+        undefined,
+        query,
+      );
+      return JSON.stringify(result, null, 2);
+    } catch (error: any) {
+      this.logger.error(`[Tool:listFields] Error: ${error.message}`, error.stack);
+      return JSON.stringify({ error: error.message });
+    }
+  }
+
+  async createField(params: {
+    table_id?: string;
+    field_name: string;
+    type: number;
+    property?: Record<string, any>;
+  }): Promise<string> {
+    try {
+      const body: Record<string, any> = {
+        field_name: params.field_name,
+        type: params.type,
+      };
+      if (params.property) body.property = params.property;
+
+      const result = await this.request(
+        `${this.getTablePath(params.table_id)}/fields`,
+        'POST',
+        body,
+      );
+      return JSON.stringify(result, null, 2);
+    } catch (error: any) {
+      this.logger.error(`[Tool:createField] Error: ${error.message}`, error.stack);
+      return JSON.stringify({ error: error.message });
+    }
+  }
+
+  async updateField(params: {
+    table_id?: string;
+    field_id: string;
+    field_name?: string;
+    type?: number;
+    property?: Record<string, any>;
+  }): Promise<string> {
+    try {
+      const body: Record<string, any> = {};
+      if (params.field_name) body.field_name = params.field_name;
+      if (params.type !== undefined) body.type = params.type;
+      if (params.property) body.property = params.property;
+
+      const result = await this.request(
+        `${this.getTablePath(params.table_id)}/fields/${params.field_id}`,
+        'PUT',
+        body,
+      );
+      return JSON.stringify(result, null, 2);
+    } catch (error: any) {
+      this.logger.error(`[Tool:updateField] Error: ${error.message}`, error.stack);
+      return JSON.stringify({ error: error.message });
+    }
+  }
+
+  async deleteField(params: { table_id?: string; field_id: string }): Promise<string> {
+    try {
+      const result = await this.request(
+        `${this.getTablePath(params.table_id)}/fields/${params.field_id}`,
+        'DELETE',
+      );
+      return JSON.stringify(result, null, 2);
+    } catch (error: any) {
+      this.logger.error(`[Tool:deleteField] Error: ${error.message}`, error.stack);
+      return JSON.stringify({ error: error.message });
+    }
+  }
+
+  async searchRecords(params: {
+    table_id?: string;
+    filter?: {
+      conjunction: 'and' | 'or';
+      conditions: Array<{
+        field_name: string;
+        operator: string;
+        value?: string[];
+      }>;
+    };
+    sort?: Array<{ field_name: string; desc?: boolean }>;
+    field_names?: string[];
+    automatic_fields?: boolean;
+    page_size?: number;
+    page_token?: string;
+  }): Promise<string> {
+    try {
+      const body: Record<string, any> = {};
+      if (params.filter) body.filter = params.filter;
+      if (params.sort) body.sort = params.sort;
+      if (params.field_names) body.field_names = params.field_names;
+      if (params.automatic_fields !== undefined)
+        body.automatic_fields = params.automatic_fields;
+      if (params.page_size) body.page_size = params.page_size;
+      if (params.page_token) body.page_token = params.page_token;
+
+      const result = await this.request(
+        `${this.getTablePath(params.table_id)}/records/search`,
+        'POST',
+        body,
+      );
+      return JSON.stringify(result, null, 2);
+    } catch (error: any) {
+      this.logger.error(`[Tool:searchRecords] Error: ${error.message}`, error.stack);
+      return JSON.stringify({ error: error.message });
+    }
+  }
+
+  async createRecord(params: {
+    table_id?: string;
+    fields: Record<string, any>;
+  }): Promise<string> {
+    try {
+      const result = await this.request(
+        `${this.getTablePath(params.table_id)}/records`,
+        'POST',
+        { fields: params.fields },
+      );
+      return JSON.stringify(result, null, 2);
+    } catch (error: any) {
+      this.logger.error(`[Tool:createRecord] Error: ${error.message}`, error.stack);
+      return JSON.stringify({ error: error.message });
+    }
+  }
+
+  async updateRecord(params: {
+    table_id?: string;
+    record_id: string;
+    fields: Record<string, any>;
+  }): Promise<string> {
+    try {
+      const result = await this.request(
+        `${this.getTablePath(params.table_id)}/records/${params.record_id}`,
+        'PUT',
+        { fields: params.fields },
+      );
+      return JSON.stringify(result, null, 2);
+    } catch (error: any) {
+      this.logger.error(`[Tool:updateRecord] Error: ${error.message}`, error.stack);
+      return JSON.stringify({ error: error.message });
+    }
+  }
+
+  async deleteRecord(params: { table_id?: string; record_id: string }): Promise<string> {
+    try {
+      const result = await this.request(
+        `${this.getTablePath(params.table_id)}/records/${params.record_id}`,
+        'DELETE',
+      );
+      return JSON.stringify(result, null, 2);
+    } catch (error: any) {
+      this.logger.error(`[Tool:deleteRecord] Error: ${error.message}`, error.stack);
+      return JSON.stringify({ error: error.message });
+    }
   }
 }
