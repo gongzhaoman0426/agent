@@ -130,7 +130,6 @@ export class FeishuBitableToolkit extends BaseToolkit {
   private buildListTablesTool(): ToolsType {
     return FunctionTool.from(
       async (params: { page_size?: number; page_token?: string }) => {
-        this.logger.log('[Tool:listTables] Called');
         try {
           const query: Record<string, string | number | boolean> = {};
           if (params.page_size) query.page_size = params.page_size;
@@ -180,7 +179,6 @@ export class FeishuBitableToolkit extends BaseToolkit {
         page_size?: number;
         page_token?: string;
       }) => {
-        this.logger.log('[Tool:listFields] Called');
         try {
           const query: Record<string, string | number | boolean> = {};
           if (params.page_size) query.page_size = params.page_size;
@@ -236,9 +234,6 @@ export class FeishuBitableToolkit extends BaseToolkit {
         type: number;
         property?: Record<string, any>;
       }) => {
-        this.logger.log(
-          `[Tool:createField] Called, field_name=${params.field_name}, type=${params.type}`,
-        );
         try {
           const body: Record<string, any> = {
             field_name: params.field_name,
@@ -302,9 +297,6 @@ export class FeishuBitableToolkit extends BaseToolkit {
         type?: number;
         property?: Record<string, any>;
       }) => {
-        this.logger.log(
-          `[Tool:updateField] Called, field_id=${params.field_id}`,
-        );
         try {
           const body: Record<string, any> = {};
           if (params.field_name) body.field_name = params.field_name;
@@ -366,9 +358,6 @@ export class FeishuBitableToolkit extends BaseToolkit {
   private buildDeleteFieldTool(): ToolsType {
     return FunctionTool.from(
       async (params: { table_id?: string; field_id: string }) => {
-        this.logger.log(
-          `[Tool:deleteField] Called, field_id=${params.field_id}`,
-        );
         try {
           const result = await this.request(
             `${this.getTablePath(params.table_id)}/fields/${params.field_id}`,
@@ -425,7 +414,6 @@ export class FeishuBitableToolkit extends BaseToolkit {
         page_size?: number;
         page_token?: string;
       }) => {
-        this.logger.log('[Tool:searchRecords] Called');
         try {
           const body: Record<string, any> = {};
           if (params.filter) body.filter = params.filter;
@@ -561,7 +549,6 @@ export class FeishuBitableToolkit extends BaseToolkit {
         table_id?: string;
         fields: Record<string, any>;
       }) => {
-        this.logger.log('[Tool:createRecord] Called');
         try {
           const result = await this.request(
             `${this.getTablePath(params.table_id)}/records`,
@@ -608,9 +595,6 @@ export class FeishuBitableToolkit extends BaseToolkit {
         record_id: string;
         fields: Record<string, any>;
       }) => {
-        this.logger.log(
-          `[Tool:updateRecord] Called, record_id=${params.record_id}`,
-        );
         try {
           const result = await this.request(
             `${this.getTablePath(params.table_id)}/records/${params.record_id}`,
@@ -658,9 +642,6 @@ export class FeishuBitableToolkit extends BaseToolkit {
   private buildDeleteRecordTool(): ToolsType {
     return FunctionTool.from(
       async (params: { table_id?: string; record_id: string }) => {
-        this.logger.log(
-          `[Tool:deleteRecord] Called, record_id=${params.record_id}`,
-        );
         try {
           const result = await this.request(
             `${this.getTablePath(params.table_id)}/records/${params.record_id}`,

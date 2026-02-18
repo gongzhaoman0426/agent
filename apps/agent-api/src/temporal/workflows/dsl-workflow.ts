@@ -31,6 +31,7 @@ const { executeDslStep } = proxyActivities<Activities>({
       'DSL_VALIDATION_ERROR',
       'TOOL_NOT_FOUND',
       'AGENT_NOT_FOUND',
+      'SyntaxError',
     ],
   },
 });
@@ -44,6 +45,12 @@ const { executeDslStep: executeDslStepLong } =
       backoffCoefficient: 2,
       maximumAttempts: 2,
       maximumInterval: '1m',
+      nonRetryableErrorTypes: [
+        'DSL_VALIDATION_ERROR',
+        'TOOL_NOT_FOUND',
+        'AGENT_NOT_FOUND',
+        'SyntaxError',
+      ],
     },
   });
 

@@ -18,8 +18,6 @@ export class KnowledgeBaseToolkit extends BaseToolkit {
       // 获取智能体可访问的知识库列表工具
       const listKnowledgeBasesTool = FunctionTool.from(
         async () => {
-          const startTime = Date.now();
-          this.logger.log('[Tool:listAgentKnowledgeBases] Called, agentId=' + this.agentId);
           try {
             const agentKnowledgeBases = await this.knowledgeBaseService.getAgentKnowledgeBases(
               this.agentId as string,
@@ -29,8 +27,6 @@ export class KnowledgeBaseToolkit extends BaseToolkit {
               name: akb.knowledgeBase.name,
               description: akb.knowledgeBase.description,
             }));
-            const elapsed = Date.now() - startTime;
-            this.logger.log(`[Tool:listAgentKnowledgeBases] Found ${result.length} knowledge bases (${elapsed}ms)`);
             return JSON.stringify(result, null, 2);
           } catch (error: any) {
             this.logger.error(`[Tool:listAgentKnowledgeBases] Error: ${error.message}`, error.stack);
@@ -51,8 +47,6 @@ export class KnowledgeBaseToolkit extends BaseToolkit {
       // 知识库查询工具
       const queryKnowledgeBaseTool = FunctionTool.from(
         async ({ knowledgeBaseId, query }: { knowledgeBaseId: string; query: string }) => {
-          const startTime = Date.now();
-          this.logger.log(`[Tool:queryKnowledgeBase] Called, knowledgeBaseId=${knowledgeBaseId}, query="${query}"`);
           try {
             // 验证智能体是否有权限访问该知识库
             const agentKnowledgeBases = await this.knowledgeBaseService.getAgentKnowledgeBases(
@@ -66,8 +60,6 @@ export class KnowledgeBaseToolkit extends BaseToolkit {
             }
 
             const answer = await this.knowledgeBaseService.chat(knowledgeBaseId, query);
-            const elapsed = Date.now() - startTime;
-            this.logger.log(`[Tool:queryKnowledgeBase] Completed (${elapsed}ms), sources: ${answer.sources?.length || 0}`);
             return JSON.stringify(answer, null, 2);
           } catch (error: any) {
             this.logger.error(`[Tool:queryKnowledgeBase] Error: ${error.message}`, error.stack);

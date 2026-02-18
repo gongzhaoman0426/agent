@@ -20,10 +20,6 @@ export class ToolsService {
     const agentToolkitInstances =
       await this.toolkitsService.getAgentToolkitInstances(agentId);
     for (const agentToolkitInstance of agentToolkitInstances) {
-      this.logger.log(
-        `agentToolkitInstance ${agentToolkitInstance.name}'s
-        tool number: ${(await agentToolkitInstance.getTools()).length}`,
-      );
       tools.push(...(await agentToolkitInstance.getTools()));
     }
 

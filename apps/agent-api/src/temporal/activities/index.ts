@@ -2,11 +2,13 @@ import { Logger } from '@nestjs/common';
 import { ToolsService } from '../../tool/tools.service';
 import { AgentService } from '../../agent/agent.service';
 import { PrismaService } from '../../prisma/prisma.service';
+import { LlamaindexService } from '../../llamaindex/llamaindex.service';
 
 export interface ActivityDeps {
   toolsService: ToolsService;
   agentService: AgentService;
   prismaService: PrismaService;
+  llamaindexService: LlamaindexService;
 }
 
 const logger = new Logger('TemporalActivities');
@@ -27,17 +29,34 @@ function stripMarkdownFences(text: string): string {
 }
 
 /**
- * 包装智能体实例，自动清理返回结果中的 markdown 代码块
+ * 包装智能体实例：
+ * 1. 清理返回结果中的 markdown 代码块
+ * 2. 如果有 outputSchema，用 LLM responseFormat 做结构化提取，保证输出是合法 JSON
  */
-function wrapAgentWithCleanup(agent: any): any {
+function wrapAgentWithStructuredOutput(
+  agent: any,
+  outputSchema: any,
+  llamaindexService: LlamaindexService,
+): any {
   const originalRun = agent.run.bind(agent);
   return {
     ...agent,
     run: async (...args: any[]) => {
       const response = await originalRun(...args);
-      // 清理 response.data.result 中的 markdown fences
       if (response?.data?.result && typeof response.data.result === 'string') {
         response.data.result = stripMarkdownFences(response.data.result);
+
+        // 如果定义了 outputSchema，用 LLM responseFormat 强制提取结构化 JSON
+        if (outputSchema && Object.keys(outputSchema).length > 0) {
+          try {
+            JSON.parse(response.data.result);
+          } catch {
+            logger.log('Agent output is not valid JSON, using structuredExtract to convert');
+            response.data.result = JSON.stringify(
+              await llamaindexService.structuredExtract(response.data.result, outputSchema),
+            );
+          }
+        }
       }
       return response;
     },
@@ -165,9 +184,7 @@ export function createActivities(deps: ActivityDeps) {
       for (const agentConfig of agentConfigs) {
         if (!handleCode.includes(agentConfig.name)) continue;
 
-        const prompt = `${agentConfig.prompt}
-永远按照下面的JSON结构生成内容，不要有其他无关的解释。
-${JSON.stringify(agentConfig.output, null, 2)}`;
+        const prompt = agentConfig.prompt;
 
         const rawAgent = await deps.agentService.createAgentInstance(
             prompt,
@@ -175,7 +192,7 @@ ${JSON.stringify(agentConfig.output, null, 2)}`;
             undefined,
             userId,
           );
-        agentsRegistry.set(agentConfig.name, wrapAgentWithCleanup(rawAgent));
+        agentsRegistry.set(agentConfig.name, wrapAgentWithStructuredOutput(rawAgent, agentConfig.output, deps.llamaindexService));
       }
 
       // Build handle function

@@ -285,45 +285,10 @@ export class AgentService {
     return result;
   }
 
-  private wrapToolWithLogging(tool: any): any {
-    const logger = this.logger;
-    const toolName = tool.metadata?.name || 'unknown';
-    const originalCall = tool.call.bind(tool);
-
-    return {
-      get metadata() {
-        return tool.metadata;
-      },
-      call: async (input: any) => {
-        const startTime = Date.now();
-        logger.log(
-          `[ToolCall] ▶ ${toolName} | input: ${JSON.stringify(input)}`,
-        );
-        try {
-          const result = await originalCall(input);
-          const elapsed = Date.now() - startTime;
-          const resultStr = typeof result === 'string' ? result : JSON.stringify(result);
-          const truncated = resultStr.length > 500 ? resultStr.slice(0, 500) + '...' : resultStr;
-          logger.log(
-            `[ToolCall] ✔ ${toolName} (${elapsed}ms) | output: ${truncated}`,
-          );
-          return result;
-        } catch (error: any) {
-          const elapsed = Date.now() - startTime;
-          logger.error(
-            `[ToolCall] ✘ ${toolName} (${elapsed}ms) | error: ${error.message}`,
-          );
-          throw error;
-        }
-      },
-    };
-  }
-
   async createAgentInstance(prompt: string, tools: string[], options?: any, userId?: string) {
     const toolsInstances = await Promise.all(
       tools.map(async (tool) => {
-        const toolInstance = await this.toolsService.getToolByName(tool, userId);
-        return this.wrapToolWithLogging(toolInstance);
+        return this.toolsService.getToolByName(tool, userId);
       }),
     );
     const agent = await this.llamaIndexService.createAgent(

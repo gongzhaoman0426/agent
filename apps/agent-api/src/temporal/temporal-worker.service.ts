@@ -11,6 +11,7 @@ import { createActivities } from './activities';
 import { ToolsService } from '../tool/tools.service';
 import { AgentService } from '../agent/agent.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { LlamaindexService } from '../llamaindex/llamaindex.service';
 
 @Injectable()
 export class TemporalWorkerService implements OnModuleInit, OnModuleDestroy {
@@ -22,6 +23,7 @@ export class TemporalWorkerService implements OnModuleInit, OnModuleDestroy {
     private readonly toolsService: ToolsService,
     private readonly agentService: AgentService,
     private readonly prismaService: PrismaService,
+    private readonly llamaindexService: LlamaindexService,
   ) {}
 
   async onModuleInit() {
@@ -48,6 +50,7 @@ export class TemporalWorkerService implements OnModuleInit, OnModuleDestroy {
         toolsService: this.toolsService,
         agentService: this.agentService,
         prismaService: this.prismaService,
+        llamaindexService: this.llamaindexService,
       });
 
       this.worker = await Worker.create({

@@ -52,7 +52,7 @@ export class KnowledgeBaseService {
       ...(process.env.ANTHROPIC_BASE_URL && { baseURL: process.env.ANTHROPIC_BASE_URL }),
     });
     Settings.llm = anthropic({
-      model: 'claude-sonnet-4.6',
+      model: 'claude-sonnet-4.5',
       temperature: 0.7,
       apiKey: process.env.ANTHROPIC_API_KEY,
       session,

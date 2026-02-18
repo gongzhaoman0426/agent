@@ -46,7 +46,6 @@ export class KnowledgeBaseExplorerToolkit extends BaseToolkit {
               createdAt: kb.createdAt,
             }));
             
-            this.logger.log('All available knowledge bases:', JSON.stringify(result, null, 2));
             return JSON.stringify(result, null, 2);
           } catch (error: any) {
             this.logger.error('Failed to list all knowledge bases:', error);
@@ -107,7 +106,6 @@ export class KnowledgeBaseExplorerToolkit extends BaseToolkit {
               createdAt: knowledgeBase.createdAt,
             };
 
-            this.logger.log('Knowledge base detail:', JSON.stringify(result, null, 2));
             return JSON.stringify(result, null, 2);
           } catch (error: any) {
             this.logger.error('Failed to get knowledge base detail:', error);
