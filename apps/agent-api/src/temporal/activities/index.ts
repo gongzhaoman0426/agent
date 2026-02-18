@@ -184,7 +184,9 @@ export function createActivities(deps: ActivityDeps) {
       for (const agentConfig of agentConfigs) {
         if (!handleCode.includes(agentConfig.name)) continue;
 
-        const prompt = agentConfig.prompt;
+        const prompt = agentConfig.output && Object.keys(agentConfig.output).length > 0
+          ? `${agentConfig.prompt}\n\n注意：你的最终回答中必须包含以下所有字段的信息：${Object.keys(agentConfig.output).join('、')}。确保每个字段都能从你的回答中提取到对应内容。`
+          : agentConfig.prompt;
 
         const rawAgent = await deps.agentService.createAgentInstance(
             prompt,
