@@ -14,24 +14,8 @@ export interface ActivityDeps {
 const logger = new Logger('TemporalActivities');
 
 /**
- * 从可能包含 markdown 代码块的字符串中提取纯 JSON/文本内容
- * LLM 经常返回 ```json ... ``` 包裹的内容，导致 JSON.parse 失败
- */
-function stripMarkdownFences(text: string): string {
-  if (typeof text !== 'string') return text;
-  const trimmed = text.trim();
-  // 匹配 ```json ... ``` 或 ``` ... ```
-  const fenceMatch = trimmed.match(/^```(?:\w+)?\s*\n?([\s\S]*?)\n?\s*```$/);
-  if (fenceMatch) {
-    return fenceMatch[1].trim();
-  }
-  return text;
-}
-
-/**
  * 包装智能体实例：
- * 1. 清理返回结果中的 markdown 代码块
- * 2. 如果有 outputSchema，用 LLM responseFormat 做结构化提取，保证输出是合法 JSON
+ * 如果有 outputSchema，用 LLM structuredExtract 提取结构化 JSON
  */
 function wrapAgentWithStructuredOutput(
   agent: any,
@@ -44,18 +28,10 @@ function wrapAgentWithStructuredOutput(
     run: async (...args: any[]) => {
       const response = await originalRun(...args);
       if (response?.data?.result && typeof response.data.result === 'string') {
-        response.data.result = stripMarkdownFences(response.data.result);
-
-        // 如果定义了 outputSchema，用 LLM responseFormat 强制提取结构化 JSON
         if (outputSchema && Object.keys(outputSchema).length > 0) {
-          try {
-            JSON.parse(response.data.result);
-          } catch {
-            logger.log('Agent output is not valid JSON, using structuredExtract to convert');
-            response.data.result = JSON.stringify(
-              await llamaindexService.structuredExtract(response.data.result, outputSchema),
-            );
-          }
+          response.data.result = JSON.stringify(
+            await llamaindexService.structuredExtract(response.data.result, outputSchema),
+          );
         }
       }
       return response;
