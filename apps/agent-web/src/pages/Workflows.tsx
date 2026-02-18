@@ -8,7 +8,6 @@ import { Label } from '@/ui/components/label'
 import { Textarea } from '@/ui/components/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/components/tabs'
 import { Separator } from '@/ui/components/separator'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/ui/components/select'
 import { GitBranch, Plus, Play, Trash2, Sparkles, Wand2, FileCode, CheckCircle2, AlertCircle, Loader2, XCircle } from 'lucide-react'
 import { useWorkflows, useCreateWorkflow, useDeleteWorkflow, useGenerateDsl, useExecuteWorkflow, useTemporalWorkflowStatus, useTemporalWorkflowResult, useCancelTemporalWorkflow } from '../services/workflow.service'
 import { useConfirmDialog } from '../hooks/use-confirm-dialog'
@@ -42,7 +41,7 @@ export function Workflows() {
   const [executeInput, setExecuteInput] = useState('')
   const [executeFields, setExecuteFields] = useState<Record<string, string>>({})
   const [executeResult, setExecuteResult] = useState<any>(null)
-  const [executeEngine, setExecuteEngine] = useState<'legacy' | 'temporal'>('legacy')
+  const executeEngine = 'temporal'
   const [temporalWorkflowId, setTemporalWorkflowId] = useState<string | null>(null)
 
   // Temporal 状态轮询
@@ -131,7 +130,6 @@ export function Workflows() {
         data: {
           input,
           context: {},
-          engine: executeEngine,
         }
       })
 
@@ -182,7 +180,6 @@ export function Workflows() {
       initial[key] = ''
     }
     setExecuteFields(initial)
-    setExecuteEngine('legacy')
     setTemporalWorkflowId(null)
     setExecuteDialogOpen(true)
   }
@@ -490,20 +487,6 @@ export function Workflows() {
           </DialogHeader>
 
           <div className="space-y-5 pt-2">
-            {/* 引擎选择 */}
-            <div className="space-y-1.5">
-              <Label>执行引擎</Label>
-              <Select value={executeEngine} onValueChange={(v: 'legacy' | 'temporal') => setExecuteEngine(v)}>
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="legacy">Legacy（同步执行）</SelectItem>
-                  <SelectItem value="temporal">Temporal（异步执行，支持重试）</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
             {(() => {
               const fields = getStartEventFields(selectedWorkflow)
               const fieldKeys = Object.keys(fields)

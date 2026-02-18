@@ -121,7 +121,6 @@ export interface CreateWorkflowDto {
 export interface ExecuteWorkflowDto {
   input: any;
   context?: any;
-  engine?: 'legacy' | 'temporal';
 }
 
 export interface TemporalWorkflowStatus {

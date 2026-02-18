@@ -92,43 +92,35 @@ export class LlamaindexService implements OnModuleInit {
   }
 
   /**
-   * 将非结构化文本提取为符合 schema 的 JSON
+   * 使用 OpenAI gpt-4o-mini 将非结构化文本提取为符合 schema 的 JSON
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async structuredExtract(text: string, outputSchema: Record<string, any>): Promise<any> {
-    const llm = this.defaultLlm;
-    if (!llm) throw new Error('LLM not initialized');
+    const { OpenAI } = await import('@llamaindex/openai');
+    const extractLlm = new OpenAI({
+      model: 'gpt-4o-mini',
+      additionalChatOptions: { response_format: { type: 'json_object' } },
+    });
 
     const schemaStr = JSON.stringify(outputSchema, null, 2);
 
-    const response = await llm.chat({
+    const response = await extractLlm.chat({
       messages: [
         {
           role: 'system' as const,
-          content: `你是一个 JSON 提取器。从用户提供的文本中提取信息，输出一个合法的 JSON 对象。
-要求：
-1. 严格遵循以下结构：${schemaStr}
-2. 只输出 JSON，不要输出任何其他文字、解释或 markdown 标记
-3. 如果某个字段在文本中找不到对应内容，用合理的默认值填充`,
+          content: `你是一个 JSON 提取器。从用户提供的文本中提取信息，输出一个合法的 JSON 对象。严格遵循以下结构：${schemaStr}`,
         },
         { role: 'user' as const, content: text },
       ],
     });
 
     const content = response.message.content;
-    let resultText = typeof content === 'string'
+    const resultText = typeof content === 'string'
       ? content
       : Array.isArray(content)
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         ? content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('')
         : String(content);
-
-    // 清理可能的 markdown 代码块包裹
-    resultText = resultText.trim();
-    const fenceMatch = resultText.match(/^```(?:\w+)?\s*\n?([\s\S]*?)\n?\s*```$/);
-    if (fenceMatch) {
-      resultText = fenceMatch[1].trim();
-    }
 
     return JSON.parse(resultText);
   }
