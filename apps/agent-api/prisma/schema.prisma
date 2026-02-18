@@ -282,6 +282,22 @@ model ChatMessage {
   @@map("chat_messages")
 }
 
+model ScheduledTask {
+  id         String    @id @default(cuid())
+  name       String
+  cron       String
+  userPrompt String    @map("user_prompt")
+  agentId    String
+  userId     String
+  enabled    Boolean   @default(true)
+  lastRunAt  DateTime?
+  lastResult String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@map("scheduled_tasks")
+}
+
 model UserToolkitSettings {
   id        String   @id @default(cuid())
   user      User     @relation(fields: [userId], references: [id])

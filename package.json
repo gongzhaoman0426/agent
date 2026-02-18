@@ -11,7 +11,11 @@
     "typecheck": "pnpm --filter agent-api typecheck && pnpm --filter agent-web typecheck",
     "lint": "pnpm --filter agent-api lint && pnpm --filter agent-web lint",
     "db:generate": "pnpm --filter agent-api db:generate",
+    "db:push": "pnpm --filter agent-api db:push",
     "db:migrate": "pnpm --filter agent-api db:migrate",
     "db:seed": "pnpm --filter agent-api db:seed"
+  },
+  "dependencies": {
+    "@nestjs/schedule": "^4.1.2"
   }
 }

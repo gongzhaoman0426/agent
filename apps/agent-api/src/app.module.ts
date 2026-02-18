@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 
 import { AgentModule } from './agent/agent.module';
 import { LlamaIndexModule } from './llamaindex/llamaindex.module';
@@ -11,12 +12,14 @@ import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
 import { TemporalModule } from './temporal/temporal.module';
 import { RedisModule } from './redis';
+import { ScheduledTaskModule } from './scheduled-task/scheduled-task.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
     }),
+    ScheduleModule.forRoot(),
     RedisModule,
     PrismaModule,
     AuthModule,
@@ -27,6 +30,7 @@ import { RedisModule } from './redis';
     KnowledgeBaseModule,
     HealthModule,
     TemporalModule,
+    ScheduledTaskModule,
   ],
   controllers: [],
   providers: [],

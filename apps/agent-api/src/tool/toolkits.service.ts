@@ -146,7 +146,7 @@ export class ToolkitsService implements OnModuleInit {
     }
   }
 
-  async getToolkitInstance(toolkitId: string, settings: any, agentId: string): Promise<Toolkit> {
+  async getToolkitInstance(toolkitId: string, settings: any, agentId: string, userId?: string): Promise<Toolkit> {
     const ToolkitClass = this.getToolkitClass(toolkitId);
     if (!ToolkitClass) {
       throw new Error(`Unknown toolkit type: ${toolkitId}`);
@@ -154,7 +154,7 @@ export class ToolkitsService implements OnModuleInit {
 
     const toolkitInstance = await this.moduleRef.get(ToolkitClass);
     await toolkitInstance.applySettings(settings);
-    toolkitInstance.setAgentContext(agentId);
+    toolkitInstance.setAgentContext(agentId, userId);
 
     return toolkitInstance;
   }
@@ -208,6 +208,7 @@ export class ToolkitsService implements OnModuleInit {
           at.toolkit.id,
           userSettingsMap[at.toolkitId] || {},
           agentId,
+          userId || undefined,
         ),
       ),
     );
