@@ -99,18 +99,18 @@ export class ScheduledTaskService implements OnModuleInit {
         },
       });
 
-      // 更新定时任务的 lastResult
+      // 更新定时任务的 lastResult（任务可能已被删除，忽略错误）
       await this.prisma.scheduledTask.update({
         where: { id: taskId },
         data: { lastRunAt: new Date(), lastResult: resultStr.substring(0, 4000) },
-      });
+      }).catch(() => {});
 
       this.logger.log(`Scheduled task ${task.name} completed successfully`);
     } catch (error: any) {
       await this.prisma.scheduledTask.update({
         where: { id: taskId },
         data: { lastRunAt: new Date(), lastResult: `ERROR: ${error.message}` },
-      });
+      }).catch(() => {});
       this.logger.error(`Scheduled task ${task.name} failed: ${error.message}`);
     }
   }
@@ -176,5 +176,28 @@ export class ScheduledTaskService implements OnModuleInit {
       throw new Error('定时任务不存在或无权限操作');
     }
     return task;
+  }
+
+  /**
+   * 查询指定 sessionId 前缀下、在 since 之后有新结果的定时任务
+   * 用于飞书 bot 轮询推送
+   */
+  async getNewResults(sessionPrefix: string, since: Date) {
+    return this.prisma.scheduledTask.findMany({
+      where: {
+        enabled: true,
+        sessionId: { startsWith: sessionPrefix },
+        lastRunAt: { gt: since },
+        lastResult: { not: null },
+      },
+      select: {
+        id: true,
+        name: true,
+        sessionId: true,
+        lastRunAt: true,
+        lastResult: true,
+      },
+      orderBy: { lastRunAt: 'asc' },
+    });
   }
 }

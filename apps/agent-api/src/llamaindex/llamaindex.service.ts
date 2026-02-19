@@ -43,7 +43,7 @@ export class LlamaindexService implements OnModuleInit {
         ...(process.env.ANTHROPIC_BASE_URL && { baseURL: process.env.ANTHROPIC_BASE_URL }),
       });
       this.defaultLlm = anthropic({
-        model: 'claude-sonnet-4.5',
+        model: 'claude-sonnet-4-6',
         temperature: 0.7,
         apiKey: process.env.ANTHROPIC_API_KEY,
         session,

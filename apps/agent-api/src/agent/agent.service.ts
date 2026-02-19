@@ -375,9 +375,6 @@ export class AgentService {
       throw new NotFoundException(`Session ${sessionId} not found`);
     }
 
-    // 删除该 session 在向量库中的记忆
-    await this.chatMemoryService.deleteSessionMemory(agentId, sessionId);
-
     // 失效会话缓存
     await this.redis.del(`user:${userId}:sessions`, `agent:${agentId}:sessions:${userId}`);
 
@@ -503,16 +500,6 @@ export class AgentService {
         result.title = fallbackTitle;
       }
     }
-
-    // 异步向量化较早的 Q&A 对（fire-and-forget，不阻塞响应）
-    const historyWithCurrentReply = [
-      ...fullHistory,
-      { role: 'user' as const, content: chatDto.message },
-      { role: 'assistant' as const, content: response.data.result },
-    ];
-    this.chatMemoryService
-      .vectorizeOlderPairs(agentId, sessionId, historyWithCurrentReply)
-      .catch((err) => this.logger.error(`[Chat] 异步向量化失败: ${err}`));
 
     return result;
   }
@@ -664,16 +651,6 @@ export class AgentService {
         title,
       },
     };
-
-    // 异步向量化
-    const historyWithCurrentReply = [
-      ...fullHistory,
-      { role: 'user' as const, content: chatDto.message },
-      { role: 'assistant' as const, content: fullResponse },
-    ];
-    this.chatMemoryService
-      .vectorizeOlderPairs(agentId, sessionId, historyWithCurrentReply)
-      .catch((err) => this.logger.error(`[ChatStream] 异步向量化失败: ${err}`));
   }
 
   private async generateTitle(userMessage: string): Promise<string> {
