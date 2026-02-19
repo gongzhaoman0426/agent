@@ -81,7 +81,7 @@ export class ToolkitsService implements OnModuleInit {
         },
       });
 
-      const tools = await toolkit.getTools();
+      const tools = await toolkit.getRawTools();
       const syncedToolNames: string[] = [];
       for (const tool of tools) {
         await this.prismaService.tool.upsert({

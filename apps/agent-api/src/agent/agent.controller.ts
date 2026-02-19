@@ -69,7 +69,7 @@ export class AgentController {
     @Body() chatDto: ChatWithAgentDto,
     @CurrentUser() user: CurrentUserPayload,
   ) {
-    return this.agentService.chatWithAgent(id, chatDto, user.userId);
+    return this.agentService.chatWithAgent(id, chatDto, user);
   }
 
   @Post(':id/chat/stream')
@@ -85,7 +85,7 @@ export class AgentController {
     res.flushHeaders();
 
     try {
-      for await (const chunk of this.agentService.chatWithAgentStream(id, chatDto, user.userId)) {
+      for await (const chunk of this.agentService.chatWithAgentStream(id, chatDto, user)) {
         res.write(`event: ${chunk.event}\ndata: ${JSON.stringify(chunk.data)}\n\n`);
       }
     } catch (error) {

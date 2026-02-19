@@ -7,6 +7,7 @@ import {
 import { Reflector } from '@nestjs/core';
 import { Request } from 'express';
 import { AuthService } from './auth.service';
+import { AccessTokenService } from '../access-token/access-token.service';
 import type { CurrentUserPayload } from './auth.type';
 
 export const IS_PUBLIC_KEY = 'isPublic';
@@ -17,6 +18,7 @@ export class JwtAuthGuard {
   constructor(
     private readonly reflector: Reflector,
     private readonly authService: AuthService,
+    private readonly accessTokenService: AccessTokenService,
   ) {}
 
   async canActivate(context: ExecutionContext) {
@@ -29,6 +31,20 @@ export class JwtAuthGuard {
     }
 
     const request = context.switchToHttp().getRequest<Request>();
+
+    // Check for sk- Bearer token first
+    const authHeader = request.headers['authorization'];
+    if (typeof authHeader === 'string' && authHeader.startsWith('Bearer sk-')) {
+      const rawToken = authHeader.slice(7);
+      const user = await this.accessTokenService.validateToken(rawToken);
+      if (!user) {
+        throw new UnauthorizedException('无效的访问令牌');
+      }
+      (request as any).user = this.toCurrentUserPayload(user, 'api');
+      return true;
+    }
+
+    // Fall back to session-based auth
     const session = await this.authService
       .getSessionByHeaders(this.toHeaders(request))
       .catch(() => null);
@@ -37,7 +53,7 @@ export class JwtAuthGuard {
       throw new UnauthorizedException('未授权访问');
     }
 
-    (request as any).user = this.toCurrentUserPayload(session.user);
+    (request as any).user = this.toCurrentUserPayload(session.user, 'web');
     return true;
   }
 
@@ -57,7 +73,7 @@ export class JwtAuthGuard {
     return headers;
   }
 
-  private toCurrentUserPayload(user: Record<string, unknown>): CurrentUserPayload {
+  private toCurrentUserPayload(user: Record<string, unknown>, source: 'web' | 'api'): CurrentUserPayload {
     const username =
       (typeof user.username === 'string' && user.username) ||
       (typeof user.name === 'string' && user.name) ||
@@ -67,6 +83,7 @@ export class JwtAuthGuard {
     return {
       userId: String(user.id),
       username,
+      source,
     };
   }
 }

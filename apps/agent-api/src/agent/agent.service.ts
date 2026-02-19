@@ -7,6 +7,7 @@ import { ChatMemoryService } from './chat-memory.service';
 import { LlamaindexService } from '../llamaindex/llamaindex.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis';
+import type { CurrentUserPayload } from '../auth/auth.type';
 
 @Injectable()
 export class AgentService {
@@ -308,6 +309,7 @@ export class AgentService {
         where: {
           deleted: false,
           userId,
+          source: 'web',
         },
         orderBy: { updatedAt: 'desc' },
         select: {
@@ -328,7 +330,7 @@ export class AgentService {
     return this.redis.getOrSet(
       `agent:${agentId}:sessions:${userId}`,
       () => this.prisma.chatSession.findMany({
-        where: { agentId, deleted: false, userId },
+        where: { agentId, deleted: false, userId, source: 'web' },
         orderBy: { updatedAt: 'desc' },
         select: {
           id: true,
@@ -380,8 +382,12 @@ export class AgentService {
 
   // ========== 对话 ==========
 
-  async chatWithAgent(agentId: string, chatDto: ChatWithAgentDto, userId: string) {
+  async chatWithAgent(agentId: string, chatDto: ChatWithAgentDto, user: CurrentUserPayload) {
     const startTime = Date.now();
+    const userId = user.userId;
+    const source = user.source;
+    // API 调用时给 sessionId 加前缀，避免与 web 端 session 冲突
+    const sessionId = source === 'api' ? `api:${chatDto.sessionId}` : chatDto.sessionId;
 
     // 获取智能体信息
     const agent = await this.findOne(agentId, userId);
@@ -390,15 +396,16 @@ export class AgentService {
 
     // 会话不存在则创建
     let session = await this.prisma.chatSession.findUnique({
-      where: { id: chatDto.sessionId },
+      where: { id: sessionId },
     });
     if (!session) {
       session = await this.prisma.chatSession.create({
         data: {
-          id: chatDto.sessionId,
+          id: sessionId,
           agentId,
           agentName: agent.name,
           userId,
+          source,
         },
       });
       // 失效会话列表缓存
@@ -410,13 +417,13 @@ export class AgentService {
       data: {
         role: 'user',
         content: chatDto.message,
-        sessionId: chatDto.sessionId,
+        sessionId,
       },
     });
 
     // 从 DB 加载历史消息（排除刚添加的当前用户消息）
     const dbMessages = await this.prisma.chatMessage.findMany({
-      where: { sessionId: chatDto.sessionId },
+      where: { sessionId },
       orderBy: { createdAt: 'asc' },
     });
     // 排除最后一条（刚添加的用户消息）
@@ -426,14 +433,14 @@ export class AgentService {
     }));
 
     // 获取智能体的工具
-    const tools = await this.toolsService.getAgentTools(agentId, chatDto.sessionId);
+    const tools = await this.toolsService.getAgentTools(agentId, sessionId);
     this.logger.log(`[Chat] Available tools: ${tools.map((t: any) => t.metadata?.name || t.name).join(', ')}`);
 
     // 处理聊天记忆：裁剪历史 + RAG 检索 + 增强 prompt
     const { enhancedPrompt, recentHistory } =
       await this.chatMemoryService.processMemory(
         agentId,
-        chatDto.sessionId,
+        sessionId,
         chatDto.message,
         fullHistory,
         agent.prompt,
@@ -457,7 +464,7 @@ export class AgentService {
       data: {
         role: 'assistant',
         content: response.data.result,
-        sessionId: chatDto.sessionId,
+        sessionId,
       },
     });
 
@@ -475,7 +482,7 @@ export class AgentService {
       try {
         const title = await this.generateTitle(chatDto.message);
         await this.prisma.chatSession.update({
-          where: { id: chatDto.sessionId },
+          where: { id: sessionId },
           data: { title },
         });
         result.title = title;
@@ -483,7 +490,7 @@ export class AgentService {
         this.logger.warn(`[Chat] Failed to generate title: ${error}`);
         const fallbackTitle = chatDto.message.slice(0, 50);
         await this.prisma.chatSession.update({
-          where: { id: chatDto.sessionId },
+          where: { id: sessionId },
           data: { title: fallbackTitle },
         });
         result.title = fallbackTitle;
@@ -497,14 +504,18 @@ export class AgentService {
       { role: 'assistant' as const, content: response.data.result },
     ];
     this.chatMemoryService
-      .vectorizeOlderPairs(agentId, chatDto.sessionId, historyWithCurrentReply)
+      .vectorizeOlderPairs(agentId, sessionId, historyWithCurrentReply)
       .catch((err) => this.logger.error(`[Chat] 异步向量化失败: ${err}`));
 
     return result;
   }
 
-  async *chatWithAgentStream(agentId: string, chatDto: ChatWithAgentDto, userId: string) {
+  async *chatWithAgentStream(agentId: string, chatDto: ChatWithAgentDto, user: CurrentUserPayload) {
     const startTime = Date.now();
+    const userId = user.userId;
+    const source = user.source;
+    // API 调用时给 sessionId 加前缀，避免与 web 端 session 冲突
+    const sessionId = source === 'api' ? `api:${chatDto.sessionId}` : chatDto.sessionId;
 
     // 获取智能体信息
     const agent = await this.findOne(agentId, userId);
@@ -513,15 +524,16 @@ export class AgentService {
 
     // 会话不存在则创建
     let session = await this.prisma.chatSession.findUnique({
-      where: { id: chatDto.sessionId },
+      where: { id: sessionId },
     });
     if (!session) {
       session = await this.prisma.chatSession.create({
         data: {
-          id: chatDto.sessionId,
+          id: sessionId,
           agentId,
           agentName: agent.name,
           userId,
+          source,
         },
       });
       // 失效会话列表缓存
@@ -533,13 +545,13 @@ export class AgentService {
       data: {
         role: 'user',
         content: chatDto.message,
-        sessionId: chatDto.sessionId,
+        sessionId,
       },
     });
 
     // 从 DB 加载历史消息（排除刚添加的当前用户消息）
     const dbMessages = await this.prisma.chatMessage.findMany({
-      where: { sessionId: chatDto.sessionId },
+      where: { sessionId },
       orderBy: { createdAt: 'asc' },
     });
     const fullHistory = dbMessages.slice(0, -1).map((msg) => ({
@@ -548,14 +560,14 @@ export class AgentService {
     }));
 
     // 获取智能体的工具
-    const tools = await this.toolsService.getAgentTools(agentId, chatDto.sessionId);
+    const tools = await this.toolsService.getAgentTools(agentId, sessionId);
     this.logger.log(`[ChatStream] Available tools: ${tools.map((t: any) => t.metadata?.name || t.name).join(', ')}`);
 
     // 处理聊天记忆
     const { enhancedPrompt, recentHistory } =
       await this.chatMemoryService.processMemory(
         agentId,
-        chatDto.sessionId,
+        sessionId,
         chatDto.message,
         fullHistory,
         agent.prompt,
@@ -612,7 +624,7 @@ export class AgentService {
       data: {
         role: 'assistant',
         content: fullResponse,
-        sessionId: chatDto.sessionId,
+        sessionId,
       },
     });
 
@@ -622,14 +634,14 @@ export class AgentService {
       try {
         title = await this.generateTitle(chatDto.message);
         await this.prisma.chatSession.update({
-          where: { id: chatDto.sessionId },
+          where: { id: sessionId },
           data: { title },
         });
       } catch (error) {
         this.logger.warn(`[ChatStream] Failed to generate title: ${error}`);
         title = chatDto.message.slice(0, 50);
         await this.prisma.chatSession.update({
-          where: { id: chatDto.sessionId },
+          where: { id: sessionId },
           data: { title },
         });
       }
@@ -653,7 +665,7 @@ export class AgentService {
       { role: 'assistant' as const, content: fullResponse },
     ];
     this.chatMemoryService
-      .vectorizeOlderPairs(agentId, chatDto.sessionId, historyWithCurrentReply)
+      .vectorizeOlderPairs(agentId, sessionId, historyWithCurrentReply)
       .catch((err) => this.logger.error(`[ChatStream] 异步向量化失败: ${err}`));
   }
 

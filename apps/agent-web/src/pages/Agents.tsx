@@ -10,11 +10,12 @@ import { Textarea } from '@/ui/components/textarea'
 import { Separator } from '@/ui/components/separator'
 import { cn } from '@/ui/lib/utils'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/ui/components/tabs'
-import { Bot, Plus, MessageSquare, Trash2, Wrench, BookOpen, Sparkles, ChevronRight, ChevronLeft, Check, Pencil, GitBranch, Code, Copy, CheckCheck } from 'lucide-react'
+import { Bot, Plus, MessageSquare, Trash2, Wrench, BookOpen, Sparkles, ChevronRight, ChevronLeft, Check, Pencil, GitBranch, Code, Copy, CheckCheck, Key } from 'lucide-react'
 import { useAgents, useCreateAgent, useDeleteAgent, useUpdateAgent } from '../services/agent.service'
 import { useToolkits } from '../services/toolkit.service'
 import { useKnowledgeBases } from '../services/knowledge-base.service'
 import { useWorkflows } from '../services/workflow.service'
+import { useAccessTokens, useCreateAccessToken, useDeleteAccessToken } from '../services/access-token.service'
 import { useConfirmDialog } from '../hooks/use-confirm-dialog'
 import type { CreateAgentDto } from '../types'
 
@@ -52,6 +53,12 @@ export function Agents() {
   const [formData, setFormData] = useState<CreateAgentDto>({ ...initialFormData })
   const [apiDialogAgent, setApiDialogAgent] = useState<{ id: string; name: string } | null>(null)
   const [copiedBlock, setCopiedBlock] = useState<string | null>(null)
+  const [tokenName, setTokenName] = useState('')
+  const [newlyCreatedToken, setNewlyCreatedToken] = useState<string | null>(null)
+
+  const { data: accessTokens = [] } = useAccessTokens()
+  const createTokenMutation = useCreateAccessToken()
+  const deleteTokenMutation = useDeleteAccessToken()
 
   const loading = agentsLoading || toolkitsLoading || kbLoading || wfLoading
 
@@ -805,7 +812,7 @@ export function Agents() {
       </Dialog>
 
       {/* API 接入对话框 */}
-      <Dialog open={!!apiDialogAgent} onOpenChange={(open) => { if (!open) setApiDialogAgent(null) }}>
+      <Dialog open={!!apiDialogAgent} onOpenChange={(open) => { if (!open) { setApiDialogAgent(null); setNewlyCreatedToken(null); setTokenName('') } }}>
         <DialogContent className="max-w-2xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden">
           <div className="px-6 pt-6 pb-4">
             <DialogHeader>
@@ -835,13 +842,100 @@ export function Agents() {
                       {`http://localhost:3001/api/agents/${apiDialogAgent.id}/chat`}
                     </code>
                   </div>
+                </div>
+
+                {/* 访问令牌 */}
+                <div className="space-y-2">
+                  <h3 className="text-sm font-medium flex items-center gap-2">
+                    <Key className="h-4 w-4" />
+                    访问令牌
+                  </h3>
+                  <p className="text-xs text-muted-foreground">创建访问令牌用于 API 认证，令牌仅在创建时显示一次</p>
+
+                  {/* 创建令牌 */}
                   <div className="flex items-center gap-2">
-                    <Badge variant="default" className="shrink-0 bg-emerald-600">POST (SSE)</Badge>
-                    <code className="flex-1 rounded-md bg-muted/50 border px-3 py-1.5 text-xs break-all">
-                      {`http://localhost:3001/api/agents/${apiDialogAgent.id}/chat/stream`}
-                    </code>
+                    <Input
+                      placeholder="令牌名称"
+                      value={tokenName}
+                      onChange={(e) => setTokenName(e.target.value)}
+                      className="h-8 text-xs"
+                    />
+                    <Button
+                      size="sm"
+                      className="h-8 shrink-0"
+                      disabled={!tokenName.trim() || createTokenMutation.isPending}
+                      onClick={async () => {
+                        const result = await createTokenMutation.mutateAsync({ name: tokenName.trim() })
+                        setNewlyCreatedToken(result.token)
+                        setTokenName('')
+                      }}
+                    >
+                      <Plus className="h-3.5 w-3.5 mr-1" />
+                      创建
+                    </Button>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">流式接口返回 Server-Sent Events，逐字输出回复内容</p>
+
+                  {/* 新创建的令牌展示 */}
+                  {newlyCreatedToken && (
+                    <div className="rounded-lg border border-amber-500/50 bg-amber-50 dark:bg-amber-950/20 p-3 space-y-2">
+                      <p className="text-xs font-medium text-amber-700 dark:text-amber-400">请立即复制此令牌，关闭后将无法再次查看</p>
+                      <div className="flex items-center gap-2">
+                        <code className="flex-1 rounded-md bg-white dark:bg-black/20 border px-3 py-1.5 text-xs break-all font-mono">
+                          {newlyCreatedToken}
+                        </code>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-8 shrink-0"
+                          onClick={() => {
+                            navigator.clipboard.writeText(newlyCreatedToken)
+                            handleCopy(newlyCreatedToken, 'new-token')
+                          }}
+                        >
+                          {copiedBlock === 'new-token' ? <CheckCheck className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+                        </Button>
+                      </div>
+                      <Button variant="ghost" size="sm" className="h-6 text-xs" onClick={() => setNewlyCreatedToken(null)}>
+                        我已复制，关闭提示
+                      </Button>
+                    </div>
+                  )}
+
+                  {/* 令牌列表 */}
+                  {accessTokens.length > 0 && (
+                    <div className="rounded-lg border overflow-hidden">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="bg-muted/50">
+                            <th className="text-left px-3 py-2 font-medium">名称</th>
+                            <th className="text-left px-3 py-2 font-medium">创建时间</th>
+                            <th className="text-left px-3 py-2 font-medium">最后使用</th>
+                            <th className="text-right px-3 py-2 font-medium">操作</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {accessTokens.map((token) => (
+                            <tr key={token.id} className="border-t">
+                              <td className="px-3 py-2 font-medium">{token.name}</td>
+                              <td className="px-3 py-2 text-muted-foreground">{new Date(token.createdAt).toLocaleDateString()}</td>
+                              <td className="px-3 py-2 text-muted-foreground">{token.lastUsedAt ? new Date(token.lastUsedAt).toLocaleDateString() : '从未使用'}</td>
+                              <td className="px-3 py-2 text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-6 text-xs text-destructive hover:text-destructive"
+                                  onClick={() => deleteTokenMutation.mutate(token.id)}
+                                >
+                                  <Trash2 className="h-3 w-3 mr-1" />
+                                  删除
+                                </Button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
                 </div>
 
                 {/* 请求参数 */}
@@ -899,6 +993,7 @@ export function Agents() {
                     <TabsContent value="curl">
                       <CodeBlock id="curl" code={`curl -X POST http://localhost:3001/api/agents/${apiDialogAgent.id}/chat \\
   -H "Content-Type: application/json" \\
+  -H "Authorization: Bearer YOUR_ACCESS_TOKEN" \\
   -d '{
     "message": "你好，请介绍一下你自己",
     "sessionId": "your-session-id",
@@ -910,7 +1005,10 @@ export function Agents() {
   "http://localhost:3001/api/agents/${apiDialogAgent.id}/chat",
   {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": "Bearer YOUR_ACCESS_TOKEN",
+    },
     body: JSON.stringify({
       message: "你好，请介绍一下你自己",
       sessionId: crypto.randomUUID(),
@@ -926,6 +1024,7 @@ console.log(data.response);`} />
 
 response = requests.post(
     "http://localhost:3001/api/agents/${apiDialogAgent.id}/chat",
+    headers={"Authorization": "Bearer YOUR_ACCESS_TOKEN"},
     json={
         "message": "你好，请介绍一下你自己",
         "sessionId": str(uuid.uuid4()),
@@ -934,85 +1033,6 @@ response = requests.post(
 )
 data = response.json()
 print(data["response"])`} />
-                    </TabsContent>
-                  </Tabs>
-                </div>
-
-                {/* 流式代码示例 */}
-                <div className="space-y-2">
-                  <h3 className="text-sm font-medium">代码示例（SSE 流式请求）</h3>
-                  <Tabs defaultValue="curl-stream">
-                    <TabsList>
-                      <TabsTrigger value="curl-stream">cURL</TabsTrigger>
-                      <TabsTrigger value="javascript-stream">JavaScript</TabsTrigger>
-                      <TabsTrigger value="python-stream">Python</TabsTrigger>
-                    </TabsList>
-                    <TabsContent value="curl-stream">
-                      <CodeBlock id="curl-stream" code={`curl -N -X POST http://localhost:3001/api/agents/${apiDialogAgent.id}/chat/stream \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "message": "你好，请介绍一下你自己",
-    "sessionId": "your-session-id",
-    "generateTitle": true
-  }'`} />
-                    </TabsContent>
-                    <TabsContent value="javascript-stream">
-                      <CodeBlock id="javascript-stream" code={`const res = await fetch(
-  "http://localhost:3001/api/agents/${apiDialogAgent.id}/chat/stream",
-  {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      message: "你好，请介绍一下你自己",
-      sessionId: crypto.randomUUID(),
-      generateTitle: true,
-    }),
-  }
-);
-const reader = res.body.getReader();
-const decoder = new TextDecoder();
-let buffer = "";
-while (true) {
-  const { done, value } = await reader.read();
-  if (done) break;
-  buffer += decoder.decode(value, { stream: true });
-  const lines = buffer.split("\\n");
-  buffer = lines.pop();
-  let eventName = "";
-  for (const line of lines) {
-    if (line.startsWith("event: ")) eventName = line.slice(7);
-    else if (line.startsWith("data: ")) {
-      const data = JSON.parse(line.slice(6));
-      if (eventName === "delta") process.stdout.write(data.delta);
-      if (eventName === "done") console.log("\\n完成:", data);
-      eventName = "";
-    }
-  }
-}`} />
-                    </TabsContent>
-                    <TabsContent value="python-stream">
-                      <CodeBlock id="python-stream" code={`import requests, json, uuid
-
-response = requests.post(
-    "http://localhost:3001/api/agents/${apiDialogAgent.id}/chat/stream",
-    json={
-        "message": "你好，请介绍一下你自己",
-        "sessionId": str(uuid.uuid4()),
-        "generateTitle": True,
-    },
-    stream=True,
-)
-event_name = ""
-for line in response.iter_lines(decode_unicode=True):
-    if line.startswith("event: "):
-        event_name = line[7:]
-    elif line.startswith("data: "):
-        data = json.loads(line[6:])
-        if event_name == "delta":
-            print(data["delta"], end="", flush=True)
-        elif event_name == "done":
-            print("\\n完成:", data)
-        event_name = ""`} />
                     </TabsContent>
                   </Tabs>
                 </div>

@@ -13,7 +13,9 @@ import type {
   ExecuteWorkflowDto,
   CreateKnowledgeBaseDto,
   UpdateKnowledgeBaseDto,
-  ChatWithKnowledgeBaseDto
+  ChatWithKnowledgeBaseDto,
+  AccessToken,
+  AccessTokenCreateResponse,
 } from '../types';
 
 const API_BASE_URL = '/api';
@@ -329,6 +331,19 @@ class ApiClient {
 
   async unlinkKnowledgeBaseFromAgent(knowledgeBaseId: string, agentId: string): Promise<void> {
     return this.delete<void>(`knowledge-base/${knowledgeBaseId}/agents/${agentId}`);
+  }
+
+  // Access Token APIs
+  async getAccessTokens(): Promise<AccessToken[]> {
+    return this.get<AccessToken[]>('access-tokens');
+  }
+
+  async createAccessToken(data: { name: string; expiresAt?: string }): Promise<AccessTokenCreateResponse> {
+    return this.post<AccessTokenCreateResponse>('access-tokens', data);
+  }
+
+  async deleteAccessToken(id: string): Promise<void> {
+    return this.delete<void>(`access-tokens/${id}`);
   }
 }
 

@@ -4,9 +4,10 @@ import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 import { PrismaModule } from '../prisma/prisma.module';
+import { AccessTokenModule } from '../access-token/access-token.module';
 
 @Module({
-  imports: [PrismaModule],
+  imports: [PrismaModule, AccessTokenModule],
   controllers: [AuthController],
   providers: [
     AuthService,

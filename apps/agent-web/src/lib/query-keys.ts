@@ -37,6 +37,9 @@ export const queryKeys = {
 
   // 统计数据相关查询
   dashboardStats: () => [...queryKeys.all, 'stats', 'dashboard'] as const,
+
+  // 访问令牌相关查询
+  accessTokens: () => [...queryKeys.all, 'access-tokens'] as const,
 } as const;
 
 // 类型安全的查询键类型

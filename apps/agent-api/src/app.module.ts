@@ -13,6 +13,7 @@ import { AuthModule } from './auth/auth.module';
 import { TemporalModule } from './temporal/temporal.module';
 import { RedisModule } from './redis';
 import { ScheduledTaskModule } from './scheduled-task/scheduled-task.module';
+import { AccessTokenModule } from './access-token/access-token.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { ScheduledTaskModule } from './scheduled-task/scheduled-task.module';
     HealthModule,
     TemporalModule,
     ScheduledTaskModule,
+    AccessTokenModule,
   ],
   controllers: [],
   providers: [],

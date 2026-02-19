@@ -162,6 +162,22 @@ export interface UpdateKnowledgeBaseDto {
   description?: string;
 }
 
+// Access Token Types
+export interface AccessToken {
+  id: string;
+  name: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  expiresAt: string | null;
+}
+
+export interface AccessTokenCreateResponse {
+  id: string;
+  name: string;
+  token: string;
+  createdAt: string;
+}
+
 export interface ChatWithKnowledgeBaseDto {
   message: string;
 }

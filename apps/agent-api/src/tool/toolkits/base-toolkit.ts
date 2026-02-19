@@ -61,6 +61,10 @@ export abstract class BaseToolkit implements Toolkit {
     // 这样即使配置不完整，也不会阻止其他 toolkit 的加载
   }
 
+  /**
+   * 获取工具列表（会校验 settings，校验失败返回空数组）
+   * 用于实际执行场景
+   */
   async getTools(): Promise<ToolsType[]> {
     // 确保初始化完成
     if (!this.isInitialized && this.initPromise) {
@@ -75,6 +79,17 @@ export abstract class BaseToolkit implements Toolkit {
       return [];
     }
 
+    return this.tools;
+  }
+
+  /**
+   * 获取工具列表（跳过 settings 校验）
+   * 用于启动时同步工具元数据到数据库，此时 settings 尚未注入
+   */
+  async getRawTools(): Promise<ToolsType[]> {
+    if (!this.isInitialized && this.initPromise) {
+      await this.initPromise;
+    }
     return this.tools;
   }
 
