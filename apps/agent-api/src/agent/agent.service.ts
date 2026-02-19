@@ -152,78 +152,85 @@ export class AgentService {
     }
 
     // 为智能体分配工具包
-    for (const config of toolkitConfigs) {
-      try {
-        // 先检查工具包是否存在
-        const toolkit = await this.prisma.toolkit.findUnique({
-          where: { id: config.toolkitId },
-        });
+    const toolkitIds = toolkitConfigs.map(c => c.toolkitId);
+    const existingToolkits = await this.prisma.toolkit.findMany({
+      where: { id: { in: toolkitIds } },
+      select: { id: true },
+    });
+    const existingIds = new Set(existingToolkits.map(t => t.id));
 
-        if (toolkit) {
-          await this.prisma.agentToolkit.create({
-            data: {
-              agentId: agentId,
-              toolkitId: config.toolkitId,
-              settings: { ...config.settings, agentId },
-            },
-          });
-        } else {
-          console.warn(`Warning: Toolkit ${config.toolkitId} not found, skipping...`);
-        }
-      } catch (error) {
-        console.error(`Error assigning toolkit ${config.toolkitId} to agent:`, error);
+    const validConfigs = toolkitConfigs.filter(c => {
+      if (!existingIds.has(c.toolkitId)) {
+        this.logger.warn(`Toolkit ${c.toolkitId} not found, skipping...`);
+        return false;
       }
+      return true;
+    });
+
+    if (validConfigs.length > 0) {
+      await this.prisma.agentToolkit.createMany({
+        data: validConfigs.map(c => ({
+          agentId,
+          toolkitId: c.toolkitId,
+          settings: { ...c.settings, agentId },
+        })),
+        skipDuplicates: true,
+      });
     }
   }
 
   private async assignKnowledgeBasesToAgent(agentId: string, dto: CreateAgentDto | UpdateAgentDto) {
-    // 如果提供了知识库配置
     if (dto.knowledgeBases && dto.knowledgeBases.length > 0) {
-      for (const kbId of dto.knowledgeBases) {
-        try {
-          // 先检查知识库是否存在
-          const knowledgeBase = await this.prisma.knowledgeBase.findUnique({
-            where: { id: kbId },
-          });
+      const existingKbs = await this.prisma.knowledgeBase.findMany({
+        where: { id: { in: dto.knowledgeBases } },
+        select: { id: true },
+      });
+      const existingIds = new Set(existingKbs.map(kb => kb.id));
 
-          if (knowledgeBase) {
-            await this.prisma.agentKnowledgeBase.create({
-              data: {
-                agentId: agentId,
-                knowledgeBaseId: kbId,
-              },
-            });
-          } else {
-            console.warn(`Warning: Knowledge base ${kbId} not found, skipping...`);
-          }
-        } catch (error) {
-          console.error(`Error assigning knowledge base ${kbId} to agent:`, error);
+      const validIds = dto.knowledgeBases.filter(kbId => {
+        if (!existingIds.has(kbId)) {
+          this.logger.warn(`Knowledge base ${kbId} not found, skipping...`);
+          return false;
         }
+        return true;
+      });
+
+      if (validIds.length > 0) {
+        await this.prisma.agentKnowledgeBase.createMany({
+          data: validIds.map(kbId => ({
+            agentId,
+            knowledgeBaseId: kbId,
+          })),
+          skipDuplicates: true,
+        });
       }
     }
   }
 
   private async assignWorkflowsToAgent(agentId: string, dto: CreateAgentDto | UpdateAgentDto) {
     if (dto.workflows && dto.workflows.length > 0) {
-      for (const workflowId of dto.workflows) {
-        try {
-          const workflow = await this.prisma.workFlow.findUnique({
-            where: { id: workflowId },
-          });
+      const existingWorkflows = await this.prisma.workFlow.findMany({
+        where: { id: { in: dto.workflows } },
+        select: { id: true },
+      });
+      const existingIds = new Set(existingWorkflows.map(w => w.id));
 
-          if (workflow) {
-            await this.prisma.agentWorkflow.create({
-              data: {
-                agentId: agentId,
-                workflowId: workflowId,
-              },
-            });
-          } else {
-            console.warn(`Warning: Workflow ${workflowId} not found, skipping...`);
-          }
-        } catch (error) {
-          console.error(`Error assigning workflow ${workflowId} to agent:`, error);
+      const validIds = dto.workflows.filter(wfId => {
+        if (!existingIds.has(wfId)) {
+          this.logger.warn(`Workflow ${wfId} not found, skipping...`);
+          return false;
         }
+        return true;
+      });
+
+      if (validIds.length > 0) {
+        await this.prisma.agentWorkflow.createMany({
+          data: validIds.map(wfId => ({
+            agentId,
+            workflowId: wfId,
+          })),
+          skipDuplicates: true,
+        });
       }
     }
   }

@@ -91,6 +91,7 @@ model Agent {
   updatedAt            DateTime               @updatedAt
   deleted              Boolean                @default(false)
 
+  @@index([createdById, deleted, isWorkflowGenerated])
   @@map("agents")
 }
 
@@ -232,6 +233,7 @@ model File {
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
+  @@index([knowledgeBaseId, status])
   @@map("files")
 }
 
@@ -256,6 +258,8 @@ model ChatSession {
   updatedAt DateTime         @updatedAt
   deleted   Boolean          @default(false)
 
+  @@index([userId, source, deleted])
+  @@index([agentId, userId, deleted])
   @@map("chat_sessions")
 }
 
@@ -270,6 +274,8 @@ model SessionSummary {
   createdAt DateTime    @default(now())
   updatedAt DateTime    @updatedAt
 
+  @@index([sessionId])
+  @@index([agentId])
   @@map("session_summaries")
 }
 
@@ -281,6 +287,7 @@ model ChatMessage {
   session   ChatSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
   createdAt DateTime    @default(now())
 
+  @@index([sessionId, createdAt])
   @@map("chat_messages")
 }
 
@@ -298,6 +305,7 @@ model ScheduledTask {
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
+  @@index([userId, enabled])
   @@map("scheduled_tasks")
 }
 
