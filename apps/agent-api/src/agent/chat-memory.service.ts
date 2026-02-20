@@ -262,7 +262,7 @@ ${block}
       '当用户询问或操作以下内容时，你必须调用对应的工具获取实时数据，严禁从对话历史或记忆中直接回答：\n' +
       '- 定时任务（查询、创建、修改、删除）→ 必须调用 listScheduledTasks / createScheduledTask / updateScheduledTask / deleteScheduledTask\n' +
       '- 任何需要查询实时状态的请求 → 必须调用工具\n' +
-      '如果用户要求删除所有定时任务，你必须先调用 listScheduledTasks 获取列表，再逐个调用 deleteScheduledTask 删除。',
+      '如果用户要求删除所有定时任务，你必须先调用 listScheduledTasks 获取列表，再调用 deleteScheduledTask 删除。',
     );
 
     const enhancedPrompt = contextParts.join('');
