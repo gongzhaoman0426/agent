@@ -83,11 +83,25 @@ export class ScheduledTaskService implements OnModuleInit {
 
       // 获取 agent 配置和工具
       const agent = await agentService.findOne(task.agentId);
-      const tools = await toolsService.getAgentTools(task.agentId);
+      const allTools = await toolsService.getAgentTools(task.agentId);
+
+      // 过滤掉定时任务相关工具，防止定时任务执行时递归创建新任务
+      const scheduledTaskToolNames = [
+        'createScheduledTask', 'updateScheduledTask', 'deleteScheduledTask',
+        'listScheduledTasks', 'getScheduledTaskDetail',
+      ];
+      const tools = allTools.filter(
+        (t: any) => !scheduledTaskToolNames.includes(t.metadata?.name),
+      );
+
+      // 在 prompt 中注入定时任务执行上下文，避免 LLM 误解 userPrompt 的意图
+      const scheduledTaskPrompt = agent.prompt +
+        '\n\n[系统提示] 当前是定时任务自动触发的执行，任务名称："' + task.name + '"。' +
+        '请直接执行用户指令并返回结果，不要反问用户，不要尝试创建或管理定时任务。';
 
       // 直接创建 agent 实例执行，不走 chatWithAgent
-      const agentInstance = await llamaindexService.createAgent(tools, agent.prompt);
-      const response = await agentInstance.run(task.userPrompt);
+      const agentInstance = await llamaindexService.createAgent(tools, scheduledTaskPrompt);
+      const response = await agentInstance.run(`现在请${task.userPrompt}`);
       const resultStr = response.data.result;
 
       // 将 agent 回复存入创建任务时的 session（只存 assistant 消息，不存 userPrompt）
