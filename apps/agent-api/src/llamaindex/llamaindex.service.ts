@@ -1,4 +1,4 @@
-import type { Anthropic } from '@llamaindex/anthropic';
+import type { OpenAI } from '@llamaindex/openai';
 import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 
 import { ToolsType } from '../tool/interface/toolkit';
@@ -10,21 +10,20 @@ let llamaindexModules: any = null;
 @Injectable()
 export class LlamaindexService implements OnModuleInit {
   private readonly logger = new Logger(LlamaindexService.name);
-  private defaultLlm: Anthropic | null = null;
+  private defaultLlm: OpenAI | null = null;
 
   constructor(@Optional() private readonly observer?: LlamaindexObserverService) {}
 
   async getLlamaindexModules() {
     if (!llamaindexModules) {
-      const [anthropicModule, openaiModule, llamaindexCore, workflowModule] = await Promise.all([
-        import('@llamaindex/anthropic'),
+      const [openaiModule, llamaindexCore, workflowModule] = await Promise.all([
         import('@llamaindex/openai'),
         import('llamaindex'),
         import('@llamaindex/workflow')
       ]);
 
       llamaindexModules = {
-        anthropic: anthropicModule.anthropic,
+        OpenAI: openaiModule.OpenAI,
         OpenAIEmbedding: openaiModule.OpenAIEmbedding,
         Settings: llamaindexCore.Settings,
         FunctionTool: llamaindexCore.FunctionTool,
@@ -35,18 +34,14 @@ export class LlamaindexService implements OnModuleInit {
   }
 
   async onModuleInit() {
-    const { anthropic, OpenAIEmbedding, Settings } = await this.getLlamaindexModules();
+    const { OpenAI, OpenAIEmbedding, Settings } = await this.getLlamaindexModules();
     try {
-      const { AnthropicSession } = await import('@llamaindex/anthropic');
-      const session = new AnthropicSession({
-        apiKey: process.env.ANTHROPIC_API_KEY,
-        ...(process.env.ANTHROPIC_BASE_URL && { baseURL: process.env.ANTHROPIC_BASE_URL }),
-      });
-      this.defaultLlm = anthropic({
-        model: 'claude-sonnet-4-6',
+      const model = process.env.OPENAI_MODEL || 'gpt-4o';
+      this.defaultLlm = new OpenAI({
+        model,
         temperature: 0.7,
-        apiKey: process.env.ANTHROPIC_API_KEY,
-        session,
+        apiKey: process.env.OPENAI_API_KEY,
+        ...(process.env.OPENAI_BASE_URL && { baseURL: process.env.OPENAI_BASE_URL }),
       });
       Settings.llm = this.defaultLlm;
       Settings.embedModel = new OpenAIEmbedding({
@@ -55,13 +50,13 @@ export class LlamaindexService implements OnModuleInit {
       });
 
       await this.observer?.setupCallbackManager();
-      this.logger.log('Default LLM (Anthropic) initialized successfully');
+      this.logger.log(`Default LLM (OpenAI ${model}) initialized successfully`);
     } catch (error) {
       this.logger.error('Failed to initialize default LLM', error);
     }
   }
 
-  async createAgent(tools: ToolsType[], prompt?: string, llm?: Anthropic) {
+  async createAgent(tools: ToolsType[], prompt?: string, llm?: OpenAI) {
     const { agent } = await this.getLlamaindexModules();
     return agent({
       tools,

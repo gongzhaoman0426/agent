@@ -8,6 +8,9 @@ import { KnowledgeBaseExplorerToolkit } from './toolkits/knowledge-base-explorer
 import { WorkflowToolkit } from './toolkits/workflow-toolkit';
 import { FeishuBitableToolkit } from './toolkits/feishu-bitable-toolkit';
 import { ScheduledTaskToolkit } from './toolkits/scheduled-task-toolkit';
+import { TushareToolkit } from './toolkits/tushare-toolkit';
+import { TavilyToolkit } from './toolkits/tavily-toolkit';
+import { CoinGeckoToolkit } from './toolkits/coingecko-toolkit';
 import { ToolkitsController } from './toolkits.controller';
 import { ToolkitsService } from './toolkits.service';
 import { ToolsService } from './tools.service';
@@ -29,6 +32,9 @@ import { ScheduledTaskModule } from '../scheduled-task/scheduled-task.module';
     WorkflowToolkit,
     FeishuBitableToolkit,
     ScheduledTaskToolkit,
+    TushareToolkit,
+    TavilyToolkit,
+    CoinGeckoToolkit,
   ],
   exports: [ToolsService, ToolkitsService],
 })

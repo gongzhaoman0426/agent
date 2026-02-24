@@ -39,7 +39,6 @@ const { executeDslStep } = proxyActivities<Activities>({
 const { executeDslStep: executeDslStepLong } =
   proxyActivities<Activities>({
     startToCloseTimeout: '10m',
-    heartbeatTimeout: '30s',
     retry: {
       initialInterval: '2s',
       backoffCoefficient: 2,

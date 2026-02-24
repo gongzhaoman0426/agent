@@ -27,14 +27,31 @@ function wrapAgentWithStructuredOutput(
     ...agent,
     run: async (...args: any[]) => {
       const response = await originalRun(...args);
-      if (response?.data?.result && typeof response.data.result === 'string') {
+      // 先把 data 读到本地变量，避免反复访问 getter
+      const data = response?.data;
+      const rawResult = data?.result;
+      logger.log(`[AgentRun] Raw result (first 200 chars): ${String(rawResult).substring(0, 200)}`);
+
+      let finalResult = rawResult;
+      if (rawResult && typeof rawResult === 'string') {
         if (outputSchema && Object.keys(outputSchema).length > 0) {
-          response.data.result = JSON.stringify(
-            await llamaindexService.structuredExtract(response.data.result, outputSchema),
-          );
+          try {
+            const extracted = await llamaindexService.structuredExtract(rawResult, outputSchema);
+            finalResult = JSON.stringify(extracted);
+            logger.log(`[AgentRun] structuredExtract result keys: ${JSON.stringify(Object.keys(extracted || {}))}`);
+          } catch (e) {
+            logger.error(`[AgentRun] structuredExtract failed: ${e.message}, using raw result`);
+            const fallback: Record<string, string> = {};
+            for (const key of Object.keys(outputSchema)) {
+              fallback[key] = rawResult;
+            }
+            finalResult = JSON.stringify(fallback);
+          }
         }
       }
-      return response;
+      logger.log(`[AgentRun] Final result (first 200 chars): ${String(finalResult).substring(0, 200)}`);
+      // 返回新对象，不 mutate 原始 response（LlamaIndex response.data 可能是 getter）
+      return { data: { ...data, result: finalResult } };
     },
   };
 }
@@ -49,8 +66,9 @@ export function createActivities(deps: ActivityDeps) {
       for (const name of params.toolNames) {
         await deps.toolsService.getToolByName(name, params.userId);
         resolved.push(name);
+        logger.log(`[resolveTools] ✓ ${name}`);
       }
-      logger.log(`Resolved ${resolved.length} tools`);
+      logger.log(`[resolveTools] Resolved ${resolved.length} tools: ${resolved.join(', ')}`);
       return resolved;
     },
 
@@ -148,17 +166,20 @@ export function createActivities(deps: ActivityDeps) {
       const toolsRegistry = new Map<string, any>();
       for (const toolName of toolNames) {
         if (handleCode.includes(toolName)) {
+          logger.log(`[${eventType}] Resolving tool: ${toolName}`);
           toolsRegistry.set(
             toolName,
             await deps.toolsService.getToolByName(toolName, userId),
           );
         }
       }
+      logger.log(`[${eventType}] Tools resolved: ${Array.from(toolsRegistry.keys()).join(', ') || 'none'}`);
 
       // Resolve agents
       const agentsRegistry = new Map<string, any>();
       for (const agentConfig of agentConfigs) {
         if (!handleCode.includes(agentConfig.name)) continue;
+        logger.log(`[${eventType}] Creating agent: ${agentConfig.name}`);
 
         const prompt = agentConfig.output && Object.keys(agentConfig.output).length > 0
           ? `${agentConfig.prompt}\n\n注意：你的最终回答中必须包含以下所有字段的信息：${Object.keys(agentConfig.output).join('、')}。确保每个字段都能从你的回答中提取到对应内容。`
@@ -191,14 +212,17 @@ export function createActivities(deps: ActivityDeps) {
       const toolFns = usedToolNames.map((n) => toolsRegistry.get(n));
       const agentFns = usedAgentNames.map((n) => agentsRegistry.get(n));
 
-      logger.log(`Executing step: ${eventType}`);
-      logger.log(`Event data keys: ${JSON.stringify(Object.keys(event.data))}`);
+      logger.log(`[${eventType}] Executing step...`);
+      logger.log(`[${eventType}] Event data keys: ${JSON.stringify(Object.keys(event.data))}`);
       try {
+        const startTime = Date.now();
         const result = await realHandle(event, context, ...toolFns, ...agentFns);
+        const duration = ((Date.now() - startTime) / 1000).toFixed(1);
+        logger.log(`[${eventType}] ✓ Completed in ${duration}s → next: ${result?.type || 'null'}`);
         return result || null;
       } catch (error) {
         logger.error(
-          `Step ${eventType} failed. event.data=${JSON.stringify(eventData)}, handleCode=${handleCode.substring(0, 200)}...`,
+          `[${eventType}] ✗ Failed: ${error.message}`,
         );
         throw error;
       }

@@ -12,8 +12,7 @@ import {
   MarkdownNodeParser,
   Settings,
 } from 'llamaindex';
-import { OpenAIEmbedding } from '@llamaindex/openai';
-import { anthropic, AnthropicSession } from '@llamaindex/anthropic';
+import { OpenAI, OpenAIEmbedding } from '@llamaindex/openai';
 import { PGVectorStore } from '@llamaindex/postgres';
 import * as fs from 'fs/promises';
 import * as path from 'path';
@@ -47,15 +46,12 @@ export class KnowledgeBaseService {
       model: 'text-embedding-3-small',
       dimensions: 1536,
     });
-    const session = new AnthropicSession({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-      ...(process.env.ANTHROPIC_BASE_URL && { baseURL: process.env.ANTHROPIC_BASE_URL }),
-    });
-    Settings.llm = anthropic({
-      model: 'claude-sonnet-4.5',
+    const model = process.env.OPENAI_MODEL || 'gpt-4o';
+    Settings.llm = new OpenAI({
+      model,
       temperature: 0.7,
-      apiKey: process.env.ANTHROPIC_API_KEY,
-      session,
+      apiKey: process.env.OPENAI_API_KEY,
+      ...(process.env.OPENAI_BASE_URL && { baseURL: process.env.OPENAI_BASE_URL }),
     });
   }
 
