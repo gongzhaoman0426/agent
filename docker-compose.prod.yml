@@ -6,8 +6,6 @@ services:
       POSTGRES_DB: hackathon
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -19,8 +17,6 @@ services:
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    ports:
-      - "6379:6379"
     volumes:
       - redis_data:/data
     healthcheck:
@@ -36,8 +32,6 @@ services:
       POSTGRES_DB: temporal
       POSTGRES_USER: temporal
       POSTGRES_PASSWORD: temporal
-    ports:
-      - "5433:5432"
     volumes:
       - temporal_db_data:/var/lib/postgresql/data
     healthcheck:
@@ -49,8 +43,6 @@ services:
   temporal:
     image: temporalio/auto-setup:1.24
     restart: unless-stopped
-    ports:
-      - "7233:7233"
     environment:
       DB: postgres12
       DB_PORT: 5432
@@ -64,19 +56,20 @@ services:
   temporal-ui:
     image: temporalio/ui:2.26.2
     restart: unless-stopped
-    ports:
-      - "8080:8080"
     environment:
       TEMPORAL_ADDRESS: temporal:7233
-      TEMPORAL_CORS_ORIGINS: http://localhost:5179
+      TEMPORAL_CORS_ORIGINS: http://localhost
     depends_on:
       - temporal
 
   agent-api:
-    image: ghcr.io/${GHCR_OWNER}/agent-api:latest
+    build:
+      context: ./apps/agent-api
+      dockerfile: Dockerfile
+      target: production
     restart: unless-stopped
     ports:
-      - "3001:3001"
+      - "${API_PUBLIC_PORT:-3001}:3001"
     env_file:
       - ./apps/agent-api/.env.prod
     environment:
@@ -93,10 +86,13 @@ services:
         condition: service_started
 
   agent-web:
-    image: ghcr.io/${GHCR_OWNER}/agent-web:latest
+    build:
+      context: ./apps/agent-web
+      dockerfile: Dockerfile
+      target: production
     restart: unless-stopped
     ports:
-      - "5179:80"
+      - "${WEB_PUBLIC_PORT:-80}:80"
     depends_on:
       - agent-api
 

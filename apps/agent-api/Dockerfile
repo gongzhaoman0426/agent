@@ -6,9 +6,9 @@ WORKDIR /app
 
 # ---- Dependencies ----
 FROM base AS deps
-COPY package.json pnpm-lock.yaml ./
+COPY package.json ./
 COPY prisma ./prisma/
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 # ---- Build ----
 FROM base AS build
