@@ -40,6 +40,10 @@ export const queryKeys = {
 
   // 访问令牌相关查询
   accessTokens: () => [...queryKeys.all, 'access-tokens'] as const,
+
+  // 技能相关查询
+  skills: (params?: Record<string, unknown>) => [...queryKeys.all, 'skills', params] as const,
+  skill: (id: string) => [...queryKeys.all, 'skills', id] as const,
 } as const;
 
 // 类型安全的查询键类型

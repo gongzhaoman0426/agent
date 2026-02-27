@@ -2,6 +2,7 @@ import type {
   Agent,
   Toolkit,
   Workflow,
+  Skill,
   KnowledgeBase,
   TemporalWorkflowStatus,
   CreateAgentDto,
@@ -16,6 +17,8 @@ import type {
   ChatWithKnowledgeBaseDto,
   AccessToken,
   AccessTokenCreateResponse,
+  CreateSkillDto,
+  UpdateSkillDto,
 } from '../types';
 
 const API_BASE_URL = '/api';
@@ -344,6 +347,30 @@ class ApiClient {
 
   async deleteAccessToken(id: string): Promise<void> {
     return this.delete<void>(`access-tokens/${id}`);
+  }
+
+  // Skill APIs
+  async getSkills(): Promise<Skill[]> {
+    return this.get<Skill[]>('skills');
+  }
+
+  async getSkill(id: string): Promise<Skill> {
+    return this.get<Skill>(`skills/${id}`);
+  }
+
+  async createSkill(data: CreateSkillDto): Promise<Skill> {
+    return this.post<Skill>('skills', data);
+  }
+
+  async updateSkill(id: string, data: UpdateSkillDto): Promise<Skill> {
+    return this.request<Skill>(`skills/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteSkill(id: string): Promise<void> {
+    return this.delete<void>(`skills/${id}`);
   }
 }
 

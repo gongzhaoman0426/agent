@@ -43,6 +43,11 @@ export class CreateAgentDto {
   @IsOptional()
   @IsString({ each: true })
   workflows?: string[];
+
+  @IsArray()
+  @IsOptional()
+  @IsString({ each: true })
+  skills?: string[];
 }
 
 export class UpdateAgentDto {
@@ -77,6 +82,11 @@ export class UpdateAgentDto {
   @IsOptional()
   @IsString({ each: true })
   workflows?: string[];
+
+  @IsArray()
+  @IsOptional()
+  @IsString({ each: true })
+  skills?: string[];
 }
 
 export class ChatWithAgentDto {

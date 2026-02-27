@@ -17,6 +17,7 @@ export interface Agent {
   agentToolkits?: AgentToolkit[];
   agentKnowledgeBases?: AgentKnowledgeBase[];
   agentWorkflows?: AgentWorkflow[];
+  agentSkills?: AgentSkill[];
 }
 
 export interface Toolkit {
@@ -56,6 +57,56 @@ export interface AgentWorkflow {
   agentId: string;
   workflowId: string;
   workflow: Workflow;
+}
+
+export interface Skill {
+  id: string;
+  name: string;
+  description: string;
+  content: string;
+  type: 'SYSTEM' | 'USER';
+  references: SkillReference[];
+  scripts: SkillScript[];
+  createdById?: string;
+  createdAt: string;
+  updatedAt: string;
+  deleted: boolean;
+}
+
+export interface SkillReference {
+  type: 'url' | 'skill' | 'text';
+  uri: string;
+  label?: string;
+}
+
+export interface SkillScript {
+  name: string;
+  language: 'javascript';
+  code: string;
+  timeout?: number;
+}
+
+export interface AgentSkill {
+  id: string;
+  agentId: string;
+  skillId: string;
+  skill: Skill;
+}
+
+export interface CreateSkillDto {
+  name: string;
+  description: string;
+  content: string;
+  references?: SkillReference[];
+  scripts?: SkillScript[];
+}
+
+export interface UpdateSkillDto {
+  name?: string;
+  description?: string;
+  content?: string;
+  references?: SkillReference[];
+  scripts?: SkillScript[];
 }
 
 export interface Workflow {
@@ -99,6 +150,7 @@ export interface CreateAgentDto {
   toolkits?: ToolkitConfigDto[];
   knowledgeBases?: string[];
   workflows?: string[];
+  skills?: string[];
 }
 
 export interface ChatWithAgentDto {

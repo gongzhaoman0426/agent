@@ -141,6 +141,7 @@ ${block}
     currentMessage: string,
     fullHistory: ChatMessageItem[],
     systemPrompt: string,
+    skills?: Array<{ name: string; description: string }>,
   ): Promise<MemoryResult> {
     this.logger.log(`[processMemory] agent=${agentId}, session=${sessionId}, 历史消息数=${fullHistory.length}, 当前消息="${currentMessage.substring(0, 80)}"`);
 
@@ -264,6 +265,30 @@ ${block}
       '- 任何需要查询实时状态的请求 → 必须调用工具\n' +
       '如果用户要求删除所有定时任务，你必须先调用 listScheduledTasks 获取列表，再调用 deleteScheduledTask 删除。',
     );
+
+    // 技能系统提示词（始终注入，即使当前无技能也要告知 Agent 可以创建）
+    const skillLines: string[] = [];
+
+    if (skills && skills.length > 0) {
+      const skillsXml = skills
+        .map(s => `  <skill name="${s.name}" description="${s.description}" />`)
+        .join('\n');
+      skillLines.push(
+        '当用户请求与以下某个技能明确相关时，调用 useSkill 工具读取完整指令后再回答。',
+        '如果没有明确匹配的技能，直接回答即可。',
+        '',
+        `<available_skills>\n${skillsXml}\n</available_skills>`,
+      );
+    }
+
+    skillLines.push(
+      '',
+      '当用户明确要求将某个流程、规范或方法论保存为技能时，调用 createSkill 工具创建。',
+      '当用户明确要求修改已有技能时，调用 updateSkill 工具更新。',
+      '不要主动建议创建技能，仅在用户明确要求时执行。',
+    );
+
+    contextParts.push('\n\n## 技能系统\n' + skillLines.join('\n'));
 
     const enhancedPrompt = contextParts.join('');
     const promptTokens = await estimateTokens(systemPrompt);

@@ -10,11 +10,12 @@ import { Textarea } from '@/ui/components/textarea'
 import { Separator } from '@/ui/components/separator'
 import { cn } from '@/ui/lib/utils'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/ui/components/tabs'
-import { Bot, Plus, MessageSquare, Trash2, Wrench, BookOpen, Sparkles, ChevronRight, ChevronLeft, Check, Pencil, GitBranch, Code, Copy, CheckCheck, Key } from 'lucide-react'
+import { Bot, Plus, MessageSquare, Trash2, Wrench, BookOpen, Sparkles, ChevronRight, ChevronLeft, Check, Pencil, GitBranch, Code, Copy, CheckCheck, Key, Zap } from 'lucide-react'
 import { useAgents, useCreateAgent, useDeleteAgent, useUpdateAgent } from '../services/agent.service'
 import { useToolkits } from '../services/toolkit.service'
 import { useKnowledgeBases } from '../services/knowledge-base.service'
 import { useWorkflows } from '../services/workflow.service'
+import { useSkills, useCreateSkill, useUpdateSkill } from '../services/skill.service'
 import { useAccessTokens, useCreateAccessToken, useDeleteAccessToken } from '../services/access-token.service'
 import { useConfirmDialog } from '../hooks/use-confirm-dialog'
 import type { CreateAgentDto } from '../types'
@@ -24,7 +25,8 @@ const STEPS = [
   { id: 1, title: '工具包', description: '选择功能工具' },
   { id: 2, title: '工作流', description: '绑定可用工作流' },
   { id: 3, title: '知识库', description: '关联知识文档' },
-  { id: 4, title: '确认创建', description: '检查并提交' },
+  { id: 4, title: '技能', description: '选择或创建技能' },
+  { id: 5, title: '确认创建', description: '检查并提交' },
 ]
 
 const initialFormData: CreateAgentDto = {
@@ -34,7 +36,8 @@ const initialFormData: CreateAgentDto = {
   options: {},
   toolkits: [],
   knowledgeBases: [],
-  workflows: []
+  workflows: [],
+  skills: [],
 }
 
 export function Agents() {
@@ -42,9 +45,12 @@ export function Agents() {
   const { data: toolkits = [], isLoading: toolkitsLoading } = useToolkits()
   const { data: knowledgeBases = [], isLoading: kbLoading } = useKnowledgeBases()
   const { data: workflows = [], isLoading: wfLoading } = useWorkflows()
+  const { data: skills = [], isLoading: skillsLoading } = useSkills()
   const createAgentMutation = useCreateAgent()
   const updateAgentMutation = useUpdateAgent()
   const deleteAgentMutation = useDeleteAgent()
+  const createSkillMutation = useCreateSkill()
+  const updateSkillMutation = useUpdateSkill()
   const { confirm, alert, ConfirmDialog } = useConfirmDialog()
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -56,11 +62,16 @@ export function Agents() {
   const [tokenName, setTokenName] = useState('')
   const [newlyCreatedToken, setNewlyCreatedToken] = useState<string | null>(null)
 
+  // 技能内联创建/编辑状态
+  const [skillFormOpen, setSkillFormOpen] = useState(false)
+  const [editingSkillId, setEditingSkillId] = useState<string | null>(null)
+  const [skillForm, setSkillForm] = useState({ name: '', description: '', content: '' })
+
   const { data: accessTokens = [] } = useAccessTokens()
   const createTokenMutation = useCreateAccessToken()
   const deleteTokenMutation = useDeleteAccessToken()
 
-  const loading = agentsLoading || toolkitsLoading || kbLoading || wfLoading
+  const loading = agentsLoading || toolkitsLoading || kbLoading || wfLoading || skillsLoading
 
   const handleCopy = (text: string, blockId: string) => {
     navigator.clipboard.writeText(text)
@@ -131,6 +142,7 @@ export function Agents() {
       toolkits: agent.agentToolkits?.map((at: any) => ({ toolkitId: at.toolkit.id, settings: at.settings })) || [],
       knowledgeBases: agent.agentKnowledgeBases?.map((akb: any) => akb.knowledgeBase.id) || [],
       workflows: agent.agentWorkflows?.map((aw: any) => aw.workflow.id) || [],
+      skills: agent.agentSkills?.map((as: any) => as.skill.id) || [],
     })
     setStep(0)
     setCreateDialogOpen(true)
@@ -174,6 +186,10 @@ export function Agents() {
   const selectedWorkflowNames = (workflows as any[])
     .filter((wf: any) => formData.workflows?.includes(wf.id))
     .map((wf: any) => wf.name)
+
+  const selectedSkillNames = (skills as any[])
+    .filter((sk: any) => formData.skills?.includes(sk.id))
+    .map((sk: any) => sk.name)
 
   if (loading) {
     return (
@@ -303,6 +319,16 @@ export function Agents() {
                       {agent.agentWorkflows.map((aw: any) => (
                         <Badge key={aw.id} className="text-[10px] px-1.5 py-0 h-5 bg-violet-500/10 text-violet-700 border-violet-500/20 hover:bg-violet-500/20" variant="outline">
                           {aw.workflow.name}
+                        </Badge>
+                      ))}
+                    </div>
+                  )}
+                  {agent.agentSkills && agent.agentSkills.length > 0 && (
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <Zap className="h-3 w-3 text-muted-foreground shrink-0" />
+                      {agent.agentSkills.map((as: any) => (
+                        <Badge key={as.id} className="text-[10px] px-1.5 py-0 h-5 bg-orange-500/10 text-orange-700 border-orange-500/20 hover:bg-orange-500/20" variant="outline">
+                          {as.skill.name}
                         </Badge>
                       ))}
                     </div>
@@ -684,8 +710,180 @@ export function Agents() {
               </div>
             )}
 
-            {/* Step 4: 确认 */}
+            {/* Step 4: 技能 */}
             {step === 4 && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm text-muted-foreground">
+                    选择已有技能或创建新技能。技能是引导智能体行为的指令文档。此步骤可选。
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="gap-1.5 shrink-0"
+                    onClick={() => {
+                      setEditingSkillId(null)
+                      setSkillForm({ name: '', description: '', content: '' })
+                      setSkillFormOpen(true)
+                    }}
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    新建技能
+                  </Button>
+                </div>
+
+                {/* 内联技能表单 */}
+                {skillFormOpen && (
+                  <div className="rounded-lg border-2 border-orange-500/30 bg-orange-500/5 p-4 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">{editingSkillId ? '编辑技能' : '新建技能'}</span>
+                      <Button variant="ghost" size="sm" onClick={() => setSkillFormOpen(false)} className="h-7 px-2 text-xs">
+                        取消
+                      </Button>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="skill-name">名称 <span className="text-destructive">*</span></Label>
+                      <Input
+                        id="skill-name"
+                        value={skillForm.name}
+                        onChange={(e) => setSkillForm({ ...skillForm, name: e.target.value })}
+                        placeholder="英文短横线命名，如 code-review"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="skill-desc">描述 <span className="text-destructive">*</span></Label>
+                      <Input
+                        id="skill-desc"
+                        value={skillForm.description}
+                        onChange={(e) => setSkillForm({ ...skillForm, description: e.target.value })}
+                        placeholder="简要描述技能的用途"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="skill-content">技能指令 <span className="text-destructive">*</span></Label>
+                      <Textarea
+                        id="skill-content"
+                        value={skillForm.content}
+                        onChange={(e) => setSkillForm({ ...skillForm, content: e.target.value })}
+                        placeholder="完整的技能指令内容（Markdown 格式）..."
+                        className="min-h-[120px] font-mono text-xs"
+                      />
+                    </div>
+                    <div className="flex justify-end">
+                      <Button
+                        size="sm"
+                        disabled={!skillForm.name.trim() || !skillForm.description.trim() || !skillForm.content.trim() || createSkillMutation.isPending || updateSkillMutation.isPending}
+                        onClick={async () => {
+                          try {
+                            if (editingSkillId) {
+                              await updateSkillMutation.mutateAsync({
+                                id: editingSkillId,
+                                data: { name: skillForm.name, description: skillForm.description, content: skillForm.content },
+                              })
+                            } else {
+                              const newSkill = await createSkillMutation.mutateAsync({
+                                name: skillForm.name,
+                                description: skillForm.description,
+                                content: skillForm.content,
+                              })
+                              // 自动选中新创建的技能
+                              setFormData({
+                                ...formData,
+                                skills: [...(formData.skills || []), newSkill.id],
+                              })
+                            }
+                            setSkillFormOpen(false)
+                            setEditingSkillId(null)
+                          } catch (error) {
+                            console.error('Failed to save skill:', error)
+                          }
+                        }}
+                        className="gap-1.5"
+                      >
+                        {(createSkillMutation.isPending || updateSkillMutation.isPending) ? '保存中...' : editingSkillId ? '保存修改' : '创建并选中'}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {/* 技能列表 */}
+                {(skills as any[]).length > 0 ? (
+                  <div className="grid grid-cols-1 gap-2.5">
+                    {(skills as any[]).map((sk: any) => {
+                      const isSelected = formData.skills?.includes(sk.id)
+                      return (
+                        <label
+                          key={sk.id}
+                          htmlFor={`sk-${sk.id}`}
+                          className={cn(
+                            'flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-all',
+                            isSelected
+                              ? 'border-orange-500/40 bg-orange-500/5'
+                              : 'border-border hover:border-orange-500/20 hover:bg-muted/30'
+                          )}
+                        >
+                          <input
+                            type="checkbox"
+                            id={`sk-${sk.id}`}
+                            checked={!!isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData({
+                                  ...formData,
+                                  skills: [...(formData.skills || []), sk.id]
+                                })
+                              } else {
+                                setFormData({
+                                  ...formData,
+                                  skills: formData.skills?.filter((id: string) => id !== sk.id) || []
+                                })
+                              }
+                            }}
+                            className="mt-0.5 accent-orange-500"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2">
+                              <span className="font-medium text-sm">{sk.name}</span>
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                                {sk.type === 'SYSTEM' ? '系统' : '自建'}
+                              </Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                              {sk.description}
+                            </p>
+                          </div>
+                          {sk.type === 'USER' && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-7 px-2 shrink-0"
+                              onClick={(e) => {
+                                e.preventDefault()
+                                e.stopPropagation()
+                                setEditingSkillId(sk.id)
+                                setSkillForm({ name: sk.name, description: sk.description, content: sk.content })
+                                setSkillFormOpen(true)
+                              }}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                          )}
+                        </label>
+                      )
+                    })}
+                  </div>
+                ) : !skillFormOpen ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Zap className="h-8 w-8 mx-auto mb-2 opacity-30" />
+                    <p className="text-sm">暂无可用的技能</p>
+                    <p className="text-xs mt-1">点击上方「新建技能」创建第一个技能</p>
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {/* Step 5: 确认 */}
+            {step === 5 && (
               <div className="space-y-5">
                 <p className="text-sm text-muted-foreground">请确认以下配置信息，然后点击创建。</p>
 
@@ -767,6 +965,26 @@ export function Agents() {
                       </div>
                     ) : (
                       <p className="text-xs text-muted-foreground">未选择知识库</p>
+                    )}
+                  </div>
+
+                  {/* 技能 */}
+                  <div className="rounded-lg border p-4 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-orange-500" />
+                      <span className="text-sm font-medium">技能</span>
+                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 ml-auto">
+                        {selectedSkillNames.length} 个
+                      </Badge>
+                    </div>
+                    {selectedSkillNames.length > 0 ? (
+                      <div className="flex flex-wrap gap-1.5">
+                        {selectedSkillNames.map((name) => (
+                          <Badge key={name} variant="outline" className="text-xs">{name}</Badge>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-muted-foreground">未选择技能</p>
                     )}
                   </div>
                 </div>

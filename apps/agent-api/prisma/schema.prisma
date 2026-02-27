@@ -83,6 +83,7 @@ model Agent {
   agentTools           AgentTool[]
   agentKnowledgeBases  AgentKnowledgeBase[]
   agentWorkflows       AgentWorkflow[]
+  agentSkills          AgentSkill[]
   workflowAgents       WorkflowAgent[]
   chatSessions         ChatSession[]
   createdById          String?
@@ -335,4 +336,41 @@ model AccessToken {
 
   @@index([userId])
   @@map("access_tokens")
+}
+
+enum SkillType {
+  SYSTEM
+  USER
+}
+
+model Skill {
+  id          String       @id @default(cuid())
+  name        String
+  description String
+  content     String       @db.Text
+  type        SkillType    @default(USER)
+  references  Json         @default("[]")
+  scripts     Json         @default("[]")
+  createdById String?
+  agentSkills AgentSkill[]
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  deleted     Boolean      @default(false)
+
+  @@unique([name, createdById])
+  @@index([createdById, deleted, type])
+  @@map("skills")
+}
+
+model AgentSkill {
+  id        String   @id @default(cuid())
+  agentId   String
+  skillId   String
+  agent     Agent    @relation(fields: [agentId], references: [id])
+  skill     Skill    @relation(fields: [skillId], references: [id])
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([agentId, skillId])
+  @@map("agent_skills")
 }

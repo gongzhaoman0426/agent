@@ -8,6 +8,7 @@ import { LlamaindexService } from '../llamaindex/llamaindex.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { RedisService } from '../redis';
 import type { CurrentUserPayload } from '../auth/auth.type';
+import { SkillService } from '../skill/skill.service';
 
 @Injectable()
 export class AgentService {
@@ -19,6 +20,7 @@ export class AgentService {
     private readonly toolsService: ToolsService,
     private readonly chatMemoryService: ChatMemoryService,
     private readonly redis: RedisService,
+    private readonly skillService: SkillService,
   ) {}
 
   async findAll(userId: string) {
@@ -48,6 +50,11 @@ export class AgentService {
           agentWorkflows: {
             include: {
               workflow: true,
+            },
+          },
+          agentSkills: {
+            include: {
+              skill: true,
             },
           },
         },
@@ -84,6 +91,11 @@ export class AgentService {
           agentWorkflows: {
             include: {
               workflow: true,
+            },
+          },
+          agentSkills: {
+            include: {
+              skill: true,
             },
           },
         },
@@ -124,6 +136,9 @@ export class AgentService {
     // 处理工作流分配
     await this.assignWorkflowsToAgent(agent.id, createAgentDto);
 
+    // 处理技能分配
+    await this.assignSkillsToAgent(agent.id, createAgentDto, userId);
+
     // 失效用户 agent 列表缓存
     await this.redis.del(`user:${userId}:agents`);
 
@@ -131,7 +146,7 @@ export class AgentService {
   }
 
   private async assignToolkitsToAgent(agentId: string, dto: CreateAgentDto | UpdateAgentDto) {
-    const commonToolkitId = 'common-toolkit-01';
+    const alwaysIncludeToolkitIds = ['common-toolkit-01', 'skill-toolkit-01'];
     const toolkitConfigs: Array<{ toolkitId: string; settings: any }> = [];
 
     // 如果提供了工具包配置
@@ -142,13 +157,14 @@ export class AgentService {
       })));
     }
 
-    // 确保 common toolkit 总是被包含
-    const hasCommonToolkit = toolkitConfigs.some(tk => tk.toolkitId === commonToolkitId);
-    if (!hasCommonToolkit) {
-      toolkitConfigs.unshift({
-        toolkitId: commonToolkitId,
-        settings: {},
-      });
+    // 确保 common-toolkit 和 skill-toolkit 总是被包含
+    for (const toolkitId of alwaysIncludeToolkitIds) {
+      if (!toolkitConfigs.some(tk => tk.toolkitId === toolkitId)) {
+        toolkitConfigs.unshift({
+          toolkitId,
+          settings: {},
+        });
+      }
     }
 
     // 为智能体分配工具包
@@ -235,6 +251,23 @@ export class AgentService {
     }
   }
 
+  private async assignSkillsToAgent(agentId: string, dto: CreateAgentDto | UpdateAgentDto, userId: string) {
+    if (dto.skills && dto.skills.length > 0) {
+      // 验证技能存在且用户有权限访问
+      for (const skillId of dto.skills) {
+        await this.skillService.findOne(skillId, userId);
+      }
+
+      await this.prisma.agentSkill.createMany({
+        data: dto.skills.map(skillId => ({
+          agentId,
+          skillId,
+        })),
+        skipDuplicates: true,
+      });
+    }
+  }
+
   async update(id: string, updateAgentDto: UpdateAgentDto, userId: string) {
     await this.findOne(id, userId);
 
@@ -273,8 +306,16 @@ export class AgentService {
       await this.assignWorkflowsToAgent(id, updateAgentDto);
     }
 
+    // 如果提供了技能配置，则更新技能分配
+    if (updateAgentDto.skills) {
+      await this.prisma.agentSkill.deleteMany({
+        where: { agentId: id },
+      });
+      await this.assignSkillsToAgent(id, updateAgentDto, userId);
+    }
+
     // 失效缓存
-    await this.redis.del(`agent:${id}:full`, `user:${userId}:agents`, `agent:${id}:toolkit-assignments`);
+    await this.redis.del(`agent:${id}:full`, `user:${userId}:agents`, `agent:${id}:toolkit-assignments`, `agent:${id}:skill-summaries`);
 
     return this.findOne(id, userId);
   }
@@ -440,6 +481,9 @@ export class AgentService {
     const tools = await this.toolsService.getAgentTools(agentId, sessionId);
     this.logger.log(`[Chat] Available tools: ${tools.map((t: any) => t.metadata?.name || t.name).join(', ')}`);
 
+    // 获取智能体的技能摘要
+    const skillSummaries = await this.skillService.getAgentSkillSummaries(agentId, userId);
+
     // 处理聊天记忆：裁剪历史 + RAG 检索 + 增强 prompt
     const { enhancedPrompt, recentHistory } =
       await this.chatMemoryService.processMemory(
@@ -448,6 +492,7 @@ export class AgentService {
         chatDto.message,
         fullHistory,
         agent.prompt,
+        skillSummaries,
       );
 
     // 创建智能体实例（使用增强后的 prompt）
@@ -557,6 +602,9 @@ export class AgentService {
     const tools = await this.toolsService.getAgentTools(agentId, sessionId);
     this.logger.log(`[ChatStream] Available tools: ${tools.map((t: any) => t.metadata?.name || t.name).join(', ')}`);
 
+    // 获取智能体的技能摘要
+    const skillSummaries = await this.skillService.getAgentSkillSummaries(agentId, userId);
+
     // 处理聊天记忆
     const { enhancedPrompt, recentHistory } =
       await this.chatMemoryService.processMemory(
@@ -565,6 +613,7 @@ export class AgentService {
         chatDto.message,
         fullHistory,
         agent.prompt,
+        skillSummaries,
       );
 
     // 创建智能体实例
