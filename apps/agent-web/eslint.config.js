@@ -3,9 +3,11 @@ import eslintConfigPrettier from "eslint-config-prettier";
 import pluginReact from "eslint-plugin-react";
 import pluginReactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
+import { dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import tseslint from "typescript-eslint";
 
-const tsconfigRootDir = import.meta.dirname;
+const tsconfigRootDir = dirname(fileURLToPath(import.meta.url));
 
 export default [
   js.configs.recommended,
