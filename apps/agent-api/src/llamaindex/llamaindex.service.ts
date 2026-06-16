@@ -1,4 +1,4 @@
-import type { Anthropic } from '@llamaindex/anthropic';
+import type { OpenAI } from '@llamaindex/openai';
 import { Injectable, Logger, OnModuleInit, Optional } from '@nestjs/common';
 
 import { ToolsType } from '../tool/interface/toolkit';
@@ -7,24 +7,26 @@ import { LlamaindexObserverService } from './llamaindex-observer.service';
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 let llamaindexModules: any = null;
 
+const DEFAULT_OPENAI_MODEL = 'gpt-5.5';
+const DEFAULT_OPENAI_EMBEDDING_MODEL = 'text-embedding-3-small';
+
 @Injectable()
 export class LlamaindexService implements OnModuleInit {
   private readonly logger = new Logger(LlamaindexService.name);
-  private defaultLlm: Anthropic | null = null;
+  private defaultLlm: OpenAI | null = null;
 
   constructor(@Optional() private readonly observer?: LlamaindexObserverService) {}
 
   async getLlamaindexModules() {
     if (!llamaindexModules) {
-      const [anthropicModule, openaiModule, llamaindexCore, workflowModule] = await Promise.all([
-        import('@llamaindex/anthropic'),
+      const [openaiModule, llamaindexCore, workflowModule] = await Promise.all([
         import('@llamaindex/openai'),
         import('llamaindex'),
         import('@llamaindex/workflow')
       ]);
 
       llamaindexModules = {
-        anthropic: anthropicModule.anthropic,
+        OpenAI: openaiModule.OpenAI,
         OpenAIEmbedding: openaiModule.OpenAIEmbedding,
         Settings: llamaindexCore.Settings,
         FunctionTool: llamaindexCore.FunctionTool,
@@ -35,33 +37,30 @@ export class LlamaindexService implements OnModuleInit {
   }
 
   async onModuleInit() {
-    const { anthropic, OpenAIEmbedding, Settings } = await this.getLlamaindexModules();
+    const { OpenAI, OpenAIEmbedding, Settings } = await this.getLlamaindexModules();
     try {
-      const { AnthropicSession } = await import('@llamaindex/anthropic');
-      const session = new AnthropicSession({
-        apiKey: process.env.ANTHROPIC_API_KEY,
-        ...(process.env.ANTHROPIC_BASE_URL && { baseURL: process.env.ANTHROPIC_BASE_URL }),
-      });
-      this.defaultLlm = anthropic({
-        model: 'claude-sonnet-4-6',
+      this.defaultLlm = new OpenAI({
+        model: process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
         temperature: 0.7,
-        apiKey: process.env.ANTHROPIC_API_KEY,
-        session,
+        apiKey: process.env.OPENAI_API_KEY,
+        ...(process.env.OPENAI_BASE_URL && { baseURL: process.env.OPENAI_BASE_URL }),
       });
       Settings.llm = this.defaultLlm;
       Settings.embedModel = new OpenAIEmbedding({
-        model: 'text-embedding-3-small',
+        model: process.env.OPENAI_EMBEDDING_MODEL || DEFAULT_OPENAI_EMBEDDING_MODEL,
         dimensions: 1536,
+        apiKey: process.env.OPENAI_API_KEY,
+        ...(process.env.OPENAI_BASE_URL && { baseURL: process.env.OPENAI_BASE_URL }),
       });
 
       await this.observer?.setupCallbackManager();
-      this.logger.log('Default LLM (Anthropic) initialized successfully');
+      this.logger.log(`Default LLM (OpenAI ${process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL}) initialized successfully`);
     } catch (error) {
       this.logger.error('Failed to initialize default LLM', error);
     }
   }
 
-  async createAgent(tools: ToolsType[], prompt?: string, llm?: Anthropic) {
+  async createAgent(tools: ToolsType[], prompt?: string, llm?: OpenAI) {
     const { agent } = await this.getLlamaindexModules();
     return agent({
       tools,
@@ -92,13 +91,15 @@ export class LlamaindexService implements OnModuleInit {
   }
 
   /**
-   * 使用 OpenAI gpt-4o-mini 将非结构化文本提取为符合 schema 的 JSON
+   * 使用默认 OpenAI 模型将非结构化文本提取为符合 schema 的 JSON
    */
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async structuredExtract(text: string, outputSchema: Record<string, any>): Promise<any> {
     const { OpenAI } = await import('@llamaindex/openai');
     const extractLlm = new OpenAI({
-      model: 'gpt-4o-mini',
+      model: process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
+      apiKey: process.env.OPENAI_API_KEY,
+      ...(process.env.OPENAI_BASE_URL && { baseURL: process.env.OPENAI_BASE_URL }),
       additionalChatOptions: { response_format: { type: 'json_object' } },
     });
 

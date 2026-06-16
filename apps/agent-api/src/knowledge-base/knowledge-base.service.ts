@@ -12,14 +12,16 @@ import {
   MarkdownNodeParser,
   Settings,
 } from 'llamaindex';
-import { OpenAIEmbedding } from '@llamaindex/openai';
-import { anthropic, AnthropicSession } from '@llamaindex/anthropic';
+import { OpenAI, OpenAIEmbedding } from '@llamaindex/openai';
 import { PGVectorStore } from '@llamaindex/postgres';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { randomUUID } from 'crypto';
 import { FileStatus } from '@prisma/client';
 import { FileResponseDto, UpdateKnowledgeBaseDto } from './knowledge-base.type';
+
+const DEFAULT_OPENAI_MODEL = 'gpt-5.5';
+const DEFAULT_OPENAI_EMBEDDING_MODEL = 'text-embedding-3-small';
 
 @Injectable()
 export class KnowledgeBaseService {
@@ -44,18 +46,16 @@ export class KnowledgeBaseService {
 
   private ensureLlamaIndexSettings() {
     Settings.embedModel = new OpenAIEmbedding({
-      model: 'text-embedding-3-small',
+      model: process.env.OPENAI_EMBEDDING_MODEL || DEFAULT_OPENAI_EMBEDDING_MODEL,
       dimensions: 1536,
+      apiKey: process.env.OPENAI_API_KEY,
+      ...(process.env.OPENAI_BASE_URL && { baseURL: process.env.OPENAI_BASE_URL }),
     });
-    const session = new AnthropicSession({
-      apiKey: process.env.ANTHROPIC_API_KEY,
-      ...(process.env.ANTHROPIC_BASE_URL && { baseURL: process.env.ANTHROPIC_BASE_URL }),
-    });
-    Settings.llm = anthropic({
-      model: 'claude-sonnet-4.5',
+    Settings.llm = new OpenAI({
+      model: process.env.OPENAI_MODEL || DEFAULT_OPENAI_MODEL,
       temperature: 0.7,
-      apiKey: process.env.ANTHROPIC_API_KEY,
-      session,
+      apiKey: process.env.OPENAI_API_KEY,
+      ...(process.env.OPENAI_BASE_URL && { baseURL: process.env.OPENAI_BASE_URL }),
     });
   }
 
