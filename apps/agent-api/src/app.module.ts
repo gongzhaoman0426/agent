@@ -10,7 +10,6 @@ import { KnowledgeBaseModule } from './knowledge-base/knowledge-base.module';
 import { ConfigModule } from '@nestjs/config';
 import { HealthModule } from './health/health.module';
 import { AuthModule } from './auth/auth.module';
-import { TemporalModule } from './temporal/temporal.module';
 import { RedisModule } from './redis';
 import { ScheduledTaskModule } from './scheduled-task/scheduled-task.module';
 import { AccessTokenModule } from './access-token/access-token.module';
@@ -31,7 +30,6 @@ import { SkillModule } from './skill/skill.module';
     LlamaIndexModule,
     KnowledgeBaseModule,
     HealthModule,
-    TemporalModule,
     ScheduledTaskModule,
     AccessTokenModule,
     SkillModule,

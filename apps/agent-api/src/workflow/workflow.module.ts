@@ -9,11 +9,12 @@ import { WorkflowController } from './workflow.controller';
 import { WorkflowDiscoveryService } from './workflow-discovery.service';
 import { WorkflowService } from './workflow.service';
 import { TimeQueryWorkflow } from './workflows/time-query.workflow';
+import { EventBus } from './event-bus';
 
 @Module({
   controllers: [WorkflowController],
   imports: [ToolsModule, AgentModule, DiscoveryModule, PrismaModule],
-  providers: [WorkflowService, WorkflowDiscoveryService, TimeQueryWorkflow],
+  providers: [EventBus, WorkflowService, WorkflowDiscoveryService, TimeQueryWorkflow],
   exports: [WorkflowService, WorkflowDiscoveryService],
 })
 export class WorkflowModule {}

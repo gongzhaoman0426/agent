@@ -175,13 +175,6 @@ export interface ExecuteWorkflowDto {
   context?: any;
 }
 
-export interface TemporalWorkflowStatus {
-  status: string;
-  startTime?: string;
-  closeTime?: string;
-  temporalWorkflowId: string;
-}
-
 // Knowledge Base Types
 export interface KnowledgeBase {
   id: string;

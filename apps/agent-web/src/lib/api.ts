@@ -4,7 +4,6 @@ import type {
   Workflow,
   Skill,
   KnowledgeBase,
-  TemporalWorkflowStatus,
   CreateAgentDto,
   ChatWithAgentDto,
   ChatSession,
@@ -267,18 +266,6 @@ class ApiClient {
 
   async executeWorkflow(id: string, data: ExecuteWorkflowDto): Promise<any> {
     return this.post<any>(`workflows/${id}/execute`, data);
-  }
-
-  async getTemporalWorkflowStatus(temporalWorkflowId: string): Promise<TemporalWorkflowStatus> {
-    return this.get<TemporalWorkflowStatus>(`workflows/temporal/${temporalWorkflowId}/status`);
-  }
-
-  async getTemporalWorkflowResult(temporalWorkflowId: string): Promise<any> {
-    return this.get<any>(`workflows/temporal/${temporalWorkflowId}/result`);
-  }
-
-  async cancelTemporalWorkflow(temporalWorkflowId: string): Promise<any> {
-    return this.post<any>(`workflows/temporal/${temporalWorkflowId}/cancel`, {});
   }
 
   async deleteWorkflow(id: string): Promise<void> {

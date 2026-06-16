@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/ui/components/card'
 import { Button } from '@/ui/components/button'
 import { Badge } from '@/ui/components/badge'
@@ -8,8 +8,8 @@ import { Label } from '@/ui/components/label'
 import { Textarea } from '@/ui/components/textarea'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/ui/components/tabs'
 import { Separator } from '@/ui/components/separator'
-import { GitBranch, Plus, Play, Trash2, Sparkles, Wand2, FileCode, CheckCircle2, AlertCircle, Loader2, XCircle } from 'lucide-react'
-import { useWorkflows, useCreateWorkflow, useDeleteWorkflow, useGenerateDsl, useExecuteWorkflow, useTemporalWorkflowStatus, useTemporalWorkflowResult, useCancelTemporalWorkflow } from '../services/workflow.service'
+import { GitBranch, Plus, Play, Trash2, Sparkles, Wand2, FileCode, CheckCircle2, AlertCircle } from 'lucide-react'
+import { useWorkflows, useCreateWorkflow, useDeleteWorkflow, useGenerateDsl, useExecuteWorkflow } from '../services/workflow.service'
 import { useConfirmDialog } from '../hooks/use-confirm-dialog'
 import type { Workflow, CreateWorkflowDto } from '../types'
 
@@ -19,8 +19,6 @@ export function Workflows() {
   const deleteWorkflowMutation = useDeleteWorkflow()
   const generateDslMutation = useGenerateDsl()
   const executeWorkflowMutation = useExecuteWorkflow()
-  const temporalResultMutation = useTemporalWorkflowResult()
-  const cancelTemporalMutation = useCancelTemporalWorkflow()
   const { confirm, alert, ConfirmDialog } = useConfirmDialog()
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -41,24 +39,6 @@ export function Workflows() {
   const [executeInput, setExecuteInput] = useState('')
   const [executeFields, setExecuteFields] = useState<Record<string, string>>({})
   const [executeResult, setExecuteResult] = useState<any>(null)
-  const executeEngine = 'temporal'
-  const [temporalWorkflowId, setTemporalWorkflowId] = useState<string | null>(null)
-
-  // Temporal 状态轮询
-  const { data: temporalStatus } = useTemporalWorkflowStatus(temporalWorkflowId)
-
-  // 当 Temporal 工作流完成时自动获取结果
-  useEffect(() => {
-    if (temporalStatus?.status === 'COMPLETED' && temporalWorkflowId) {
-      temporalResultMutation.mutateAsync(temporalWorkflowId).then((result) => {
-        setExecuteResult(result)
-        setTemporalWorkflowId(null)
-      })
-    } else if (temporalStatus?.status === 'FAILED' || temporalStatus?.status === 'CANCELLED') {
-      setExecuteResult({ error: `工作流${temporalStatus.status === 'FAILED' ? '执行失败' : '已取消'}` })
-      setTemporalWorkflowId(null)
-    }
-  }, [temporalStatus?.status])
 
   const generateDslFromNaturalLanguage = async () => {
     if (!naturalLanguageInput.trim()) return
@@ -68,11 +48,11 @@ export function Workflows() {
         userMessage: naturalLanguageInput
       })
 
-      setGeneratedDsl(response.dsl.data)
+      setGeneratedDsl(response.dsl)
       setFormData({
-        name: response.dsl.data.name || '',
-        description: response.dsl.data.description || '',
-        dsl: response.dsl.data
+        name: response.dsl.name || '',
+        description: response.dsl.description || '',
+        dsl: response.dsl
       })
     } catch (error) {
       console.error('Failed to generate DSL:', error)
@@ -133,13 +113,7 @@ export function Workflows() {
         }
       })
 
-      if (executeEngine === 'temporal' && result.temporalWorkflowId) {
-        // 异步模式：开始轮询状态
-        setTemporalWorkflowId(result.temporalWorkflowId)
-        setExecuteResult({ message: '工作流已提交，等待执行...', temporalWorkflowId: result.temporalWorkflowId })
-      } else {
-        setExecuteResult(result)
-      }
+      setExecuteResult(result)
     } catch (error) {
       console.error('Failed to execute workflow:', error)
       setExecuteResult({ error: '执行失败: ' + (error as Error).message })
@@ -180,7 +154,6 @@ export function Workflows() {
       initial[key] = ''
     }
     setExecuteFields(initial)
-    setTemporalWorkflowId(null)
     setExecuteDialogOpen(true)
   }
 
@@ -517,37 +490,7 @@ export function Workflows() {
               )
             })()}
 
-            {/* Temporal 轮询状态 */}
-            {temporalWorkflowId && temporalStatus && (
-              <div className="rounded-lg border border-blue-200 bg-blue-50/50 p-3">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-1.5">
-                    <Loader2 className="h-3.5 w-3.5 text-blue-500 animate-spin" />
-                    <p className="text-xs font-medium text-blue-700">
-                      工作流执行中 — {temporalStatus.status}
-                    </p>
-                  </div>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 px-2 text-xs text-destructive"
-                    onClick={() => {
-                      cancelTemporalMutation.mutate(temporalWorkflowId)
-                      setTemporalWorkflowId(null)
-                      setExecuteResult({ error: '已取消' })
-                    }}
-                  >
-                    <XCircle className="h-3 w-3 mr-1" />
-                    取消
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  ID: {temporalWorkflowId}
-                </p>
-              </div>
-            )}
-
-            {executeResult && !temporalWorkflowId && (
+            {executeResult && (
               <div className="rounded-lg border p-3">
                 <div className="flex items-center gap-1.5 mb-2">
                   {executeResult.error ? (
@@ -570,7 +513,6 @@ export function Workflows() {
                 variant="outline"
                 onClick={() => {
                   setExecuteDialogOpen(false)
-                  setTemporalWorkflowId(null)
                 }}
                 disabled={executeWorkflowMutation.isPending}
               >
@@ -579,7 +521,7 @@ export function Workflows() {
               <Button
                 onClick={handleExecute}
                 className="gap-1.5"
-                disabled={executeWorkflowMutation.isPending || !!temporalWorkflowId || (() => {
+                disabled={executeWorkflowMutation.isPending || (() => {
                   const fields = getStartEventFields(selectedWorkflow)
                   const fieldKeys = Object.keys(fields)
                   if (fieldKeys.length > 0) {
@@ -589,7 +531,7 @@ export function Workflows() {
                 })()}
               >
                 <Play className="h-3.5 w-3.5" />
-                {executeWorkflowMutation.isPending ? '提交中...' : temporalWorkflowId ? '执行中...' : '执行'}
+                {executeWorkflowMutation.isPending ? '执行中...' : '执行'}
               </Button>
             </div>
           </div>

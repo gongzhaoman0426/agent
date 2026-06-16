@@ -5,11 +5,20 @@ import pluginReactHooks from "eslint-plugin-react-hooks";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
+const tsconfigRootDir = import.meta.dirname;
+
 export default [
   js.configs.recommended,
   eslintConfigPrettier,
   ...tseslint.configs.recommended,
   pluginReact.configs.flat.recommended,
+  {
+    languageOptions: {
+      parserOptions: {
+        tsconfigRootDir,
+      },
+    },
+  },
   {
     languageOptions: {
       ...pluginReact.configs.flat.recommended.languageOptions,

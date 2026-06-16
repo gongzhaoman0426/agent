@@ -106,31 +106,3 @@ export const useExecuteWorkflow = () => {
       apiClient.executeWorkflow(id, data),
   });
 };
-
-export const useTemporalWorkflowStatus = (temporalWorkflowId: string | null) => {
-  return useQuery({
-    queryKey: ['temporal-workflow-status', temporalWorkflowId],
-    queryFn: () => apiClient.getTemporalWorkflowStatus(temporalWorkflowId!),
-    enabled: !!temporalWorkflowId,
-    refetchInterval: (query) => {
-      const status = query.state.data?.status;
-      // 工作流还在运行中时每 3 秒轮询一次
-      if (status === 'RUNNING') return 3000;
-      return false;
-    },
-  });
-};
-
-export const useTemporalWorkflowResult = () => {
-  return useMutation({
-    mutationFn: (temporalWorkflowId: string) =>
-      apiClient.getTemporalWorkflowResult(temporalWorkflowId),
-  });
-};
-
-export const useCancelTemporalWorkflow = () => {
-  return useMutation({
-    mutationFn: (temporalWorkflowId: string) =>
-      apiClient.cancelTemporalWorkflow(temporalWorkflowId),
-  });
-};

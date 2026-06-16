@@ -109,28 +109,6 @@ export class WorkflowController {
     );
   }
 
-  @Get('temporal/:temporalWorkflowId/status')
-  async getTemporalWorkflowStatus(
-    @Param('temporalWorkflowId') temporalWorkflowId: string,
-  ) {
-    return this.workflowService.getTemporalWorkflowStatus(temporalWorkflowId);
-  }
-
-  @Get('temporal/:temporalWorkflowId/result')
-  async getTemporalWorkflowResult(
-    @Param('temporalWorkflowId') temporalWorkflowId: string,
-  ) {
-    return this.workflowService.getTemporalWorkflowResult(temporalWorkflowId);
-  }
-
-  @Post('temporal/:temporalWorkflowId/cancel')
-  async cancelTemporalWorkflow(
-    @Param('temporalWorkflowId') temporalWorkflowId: string,
-  ) {
-    await this.workflowService.cancelTemporalWorkflow(temporalWorkflowId);
-    return { cancelled: true, temporalWorkflowId };
-  }
-
   @Get(':id/agents')
   async getWorkflowAgents(
     @Param('id') id: string,
