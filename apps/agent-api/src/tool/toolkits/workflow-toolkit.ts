@@ -86,7 +86,7 @@ export class WorkflowToolkit extends BaseToolkit {
 
     const workflows = agentWorkflows
       .map((aw: any) => aw.workflow)
-      .filter((wf: any) => !wf.deleted)
+      .filter((wf: any) => !wf.deleted && wf.source === 'code')
       .map((wf: any) => {
         const inputSchema = this.extractInputSchema(wf.DSL);
         const exampleInput = Object.fromEntries(

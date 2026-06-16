@@ -632,7 +632,7 @@ export function Agents() {
                     <GitBranch className="h-8 w-8 mx-auto mb-2 opacity-30" />
                     <p className="text-sm">暂无可用的工作流</p>
                     <p className="text-xs mt-1">
-                      前往 <Link to="/manage/workflows" className="text-primary hover:underline">工作流管理</Link> 创建
+                      在后端添加代码定义后，工作流会自动同步到这里
                     </p>
                   </div>
                 )}

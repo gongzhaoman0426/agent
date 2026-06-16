@@ -226,7 +226,11 @@ export class AgentService {
   private async assignWorkflowsToAgent(agentId: string, dto: CreateAgentDto | UpdateAgentDto) {
     if (dto.workflows && dto.workflows.length > 0) {
       const existingWorkflows = await this.prisma.workFlow.findMany({
-        where: { id: { in: dto.workflows } },
+        where: {
+          id: { in: dto.workflows },
+          source: 'code',
+          deleted: false,
+        },
         select: { id: true },
       });
       const existingIds = new Set(existingWorkflows.map(w => w.id));

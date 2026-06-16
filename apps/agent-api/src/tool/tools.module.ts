@@ -2,9 +2,7 @@ import { Module } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
 
 import { CommonToolkit } from './toolkits/common-toolkit';
-import { ToolExplorerToolkit } from './toolkits/tool-explorer-toolkit';
 import { KnowledgeBaseToolkit } from './toolkits/knowledge-base-toolkit';
-import { KnowledgeBaseExplorerToolkit } from './toolkits/knowledge-base-explorer-toolkit';
 import { WorkflowToolkit } from './toolkits/workflow-toolkit';
 import { FeishuBitableToolkit } from './toolkits/feishu-bitable-toolkit';
 import { ScheduledTaskToolkit } from './toolkits/scheduled-task-toolkit';
@@ -25,9 +23,7 @@ import { SkillModule } from '../skill/skill.module';
     ToolsService,
     ToolkitsService,
     CommonToolkit,
-    ToolExplorerToolkit,
     KnowledgeBaseToolkit,
-    KnowledgeBaseExplorerToolkit,
     WorkflowToolkit,
     FeishuBitableToolkit,
     ScheduledTaskToolkit,

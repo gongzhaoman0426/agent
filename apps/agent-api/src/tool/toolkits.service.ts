@@ -31,6 +31,9 @@ export class ToolkitsService implements OnModuleInit {
     // 失效 toolkit 相关缓存
     await this.redis.del('toolkits:all');
     await this.redis.delByPattern('tool:name:*');
+    await this.redis.delByPattern('agent:*:toolkit-assignments');
+    await this.redis.delByPattern('agent:*:full');
+    await this.redis.delByPattern('user:*:toolkit-settings:*');
     this.logger.log('Toolkit discovery and synchronization completed');
   }
 
@@ -130,18 +133,42 @@ export class ToolkitsService implements OnModuleInit {
   private async cleanupObsoleteToolkits() {
     const dbToolkits = await this.prismaService.toolkit.findMany({
       where: { deleted: false },
+      include: {
+        tools: {
+          select: { id: true, name: true },
+        },
+      },
     });
 
     for (const dbToolkit of dbToolkits) {
       if (!this.toolkitMap.has(dbToolkit.id)) {
+        const staleToolIds = dbToolkit.tools.map((tool) => tool.id);
+
+        if (staleToolIds.length > 0) {
+          await this.prismaService.agentTool.deleteMany({
+            where: { toolId: { in: staleToolIds } },
+          });
+        }
+
+        await this.prismaService.agentToolkit.deleteMany({
+          where: { toolkitId: dbToolkit.id },
+        });
+
+        await this.prismaService.userToolkitSettings.deleteMany({
+          where: { toolkitId: dbToolkit.id },
+        });
+
+        await this.prismaService.tool.deleteMany({
+          where: { toolkitId: dbToolkit.id },
+        });
+
         await this.prismaService.toolkit.update({
           where: { id: dbToolkit.id },
           data: { deleted: true },
         });
-        await this.prismaService.tool.deleteMany({
-          where: { toolkitId: dbToolkit.id },
-        });
-        this.logger.warn(`Marked toolkit as deleted: ${dbToolkit.id}`);
+        this.logger.warn(
+          `Marked toolkit as deleted and removed assignments: ${dbToolkit.id}`,
+        );
       }
     }
   }
@@ -167,7 +194,12 @@ export class ToolkitsService implements OnModuleInit {
     const agentToolkits = await this.redis.getOrSet(
       `agent:${agentId}:toolkit-assignments`,
       () => this.prismaService.agentToolkit.findMany({
-        where: { agentId },
+        where: {
+          agentId,
+          toolkit: {
+            deleted: false,
+          },
+        },
         include: { toolkit: true },
       }),
       3600,

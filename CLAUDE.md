@@ -22,7 +22,7 @@ apps/
 │   ├── src/
 │   │   ├── agent/      # Agent CRUD、对话、流式响应、聊天记忆
 │   │   ├── tool/       # Toolkit 发现、注册、实例化
-│   │   ├── workflow/   # DSL 工作流定义与生成
+│   │   ├── workflow/   # 代码定义 DSL 工作流与同步
 │   │   ├── knowledge-base/  # 知识库管理、文件处理、向量检索
 │   │   ├── llamaindex/ # LLM 初始化与 agent 创建
 │   │   ├── auth/       # 认证 (better-auth + JWT guard)
@@ -87,14 +87,15 @@ docker compose up -d      # 启动基础设施 (PostgreSQL, Redis)
 
 `@toolkitId` 装饰器注册，启动时自动发现并同步到数据库。每个 Toolkit 继承 `BaseToolkit`，实现 `initTools()` 和 `validateSettings()`。内置 Toolkit：
 - `common-toolkit-01` — 时间查询、等待（所有 Agent 默认挂载）
-- `tool-explorer` — 工具发现
-- `knowledge-base-toolkit` / `knowledge-base-explorer` — 知识库查询
+- `knowledge-base-toolkit` — 知识库查询
 - `workflow-toolkit` — 工作流执行
 - `feishu-bitable-toolkit` — 飞书多维表格
 
 ### Workflow DSL
 
 工作流通过事件链驱动：`WORKFLOW_START → 自定义事件 → WORKFLOW_STOP`。每个 step 的 `handle` 是一个 async function 字符串，在自定义执行器中通过 `new Function()` 执行。DSL 中可定义专属 agent 和 tool。
+
+工作流不再由前端创建。新增工作流时，在 `apps/agent-api/src/workflow/workflows/*.workflow.ts` 中继承 `BaseWorkflow`，使用 `@workflowId('your-workflow-id')` 标记，并在 `WorkflowModule` 的 `providers` 中注册。服务启动时 `WorkflowDiscoveryService` 会像 Toolkit 一样把代码定义 upsert 到 `workflows` 表，移除的 code workflow 会被软删除。
 
 ### 流式响应 (SSE)
 
@@ -106,7 +107,7 @@ PostgreSQL 15 + pgvector 扩展。核心表：
 - `Agent` — 智能体定义 (prompt, options, soft delete)
 - `Toolkit` / `Tool` — 工具注册表
 - `AgentToolkit` / `AgentTool` — Agent 与工具的关联
-- `WorkFlow` / `WorkflowAgent` — 工作流 DSL 与关联 Agent
+- `WorkFlow` / `WorkflowAgent` — 代码同步的工作流 DSL 与关联 Agent
 - `KnowledgeBase` / `File` — 知识库与文件 (状态机: PENDING→PROCESSING→PROCESSED/FAILED)
 - `ChatSession` / `ChatMessage` — 对话历史
 - `UserToolkitSettings` — 用户级工具配置

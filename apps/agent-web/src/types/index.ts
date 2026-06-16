@@ -160,16 +160,6 @@ export interface ChatWithAgentDto {
   generateTitle?: boolean;
 }
 
-export interface GenerateDslDto {
-  userMessage: string;
-}
-
-export interface CreateWorkflowDto {
-  name: string;
-  description?: string;
-  dsl: any;
-}
-
 export interface ExecuteWorkflowDto {
   input: any;
   context?: any;

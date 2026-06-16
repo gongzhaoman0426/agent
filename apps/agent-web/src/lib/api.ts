@@ -8,8 +8,6 @@ import type {
   ChatWithAgentDto,
   ChatSession,
   ChatSessionSummary,
-  GenerateDslDto,
-  CreateWorkflowDto,
   ExecuteWorkflowDto,
   CreateKnowledgeBaseDto,
   UpdateKnowledgeBaseDto,
@@ -256,20 +254,8 @@ class ApiClient {
     return this.get<Workflow>(`workflows/${id}`);
   }
 
-  async generateDsl(data: GenerateDslDto): Promise<{ dsl: any }> {
-    return this.post<{ dsl: any }>('workflows/generate-dsl', data);
-  }
-
-  async createWorkflow(data: CreateWorkflowDto): Promise<Workflow> {
-    return this.post<Workflow>('workflows', data);
-  }
-
   async executeWorkflow(id: string, data: ExecuteWorkflowDto): Promise<any> {
     return this.post<any>(`workflows/${id}/execute`, data);
-  }
-
-  async deleteWorkflow(id: string): Promise<void> {
-    return this.delete<void>(`workflows/${id}`);
   }
 
   // Knowledge Base APIs

@@ -2,6 +2,7 @@ import { Injectable, OnModuleInit, Type, Logger } from '@nestjs/common';
 import { DiscoveryService, Reflector } from '@nestjs/core';
 
 import { PrismaService } from '../prisma/prisma.service';
+import { RedisService } from '../redis';
 import { BaseWorkflow } from './base-workflow';
 import { WORKFLOW_ID_KEY } from './workflow.decorator';
 
@@ -15,6 +16,7 @@ export class WorkflowDiscoveryService implements OnModuleInit {
     private discoveryService: DiscoveryService,
     private reflector: Reflector,
     private prismaService: PrismaService,
+    private readonly redis: RedisService,
   ) {}
 
   async onModuleInit() {
@@ -26,6 +28,7 @@ export class WorkflowDiscoveryService implements OnModuleInit {
     this.discoverWorkflows();
     await this.syncWorkflowsToDatabase();
     await this.cleanupObsoleteCodeWorkflows();
+    await this.invalidateWorkflowCaches();
     this.logger.log('Workflow discovery and synchronization completed');
   }
 
@@ -95,6 +98,12 @@ export class WorkflowDiscoveryService implements OnModuleInit {
         this.logger.warn(`Marked obsolete code workflow as deleted: ${dbWorkflow.id}`);
       }
     }
+  }
+
+  private async invalidateWorkflowCaches() {
+    await this.redis.del('workflows:all');
+    await this.redis.delByPattern('user:*:workflows');
+    await this.redis.delByPattern('workflow:*');
   }
 
   isCodeWorkflow(id: string): boolean {
