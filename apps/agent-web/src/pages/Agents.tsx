@@ -393,7 +393,7 @@ export function Agents() {
 
       {/* Create Agent Dialog - Stepper */}
       <Dialog open={createDialogOpen} onOpenChange={(open) => { if (!open) closeDialog() }}>
-        <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col gap-0 p-0 overflow-hidden">
+        <DialogContent className="sm:max-w-3xl lg:max-w-4xl max-h-[90vh] flex flex-col gap-0 p-0 overflow-hidden">
           {/* Dialog Header */}
           <div className="px-6 pt-6 pb-4">
             <DialogHeader>
@@ -401,9 +401,9 @@ export function Agents() {
                 <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
                   <Sparkles className="h-5 w-5 text-primary" />
                 </div>
-                <div>
-                  <DialogTitle>{editingAgentId ? '编辑智能体' : '创建智能体'}</DialogTitle>
-                  <DialogDescription>
+                <div className="min-w-0">
+                  <DialogTitle className="truncate">{editingAgentId ? '编辑智能体' : '创建智能体'}</DialogTitle>
+                  <DialogDescription className="line-clamp-2">
                     {STEPS[step]?.description}
                   </DialogDescription>
                 </div>
@@ -413,42 +413,45 @@ export function Agents() {
 
           {/* Stepper Indicator */}
           <div className="px-6 pb-4">
-            <div className="flex items-center gap-0.5">
-              {STEPS.map((s, i) => (
-                <div key={s.id} className="flex items-center flex-1 min-w-0">
-                  <button
-                    type="button"
-                    onClick={() => { if (i < step || (i > step && canGoNext())) setStep(i) }}
-                    disabled={i > step && !canGoNext()}
-                    className={cn(
-                      'flex items-center gap-1.5 rounded-lg px-1.5 py-1.5 text-xs transition-colors w-full min-w-0',
-                      i === step
-                        ? 'bg-primary/10 text-primary font-medium'
-                        : i < step
-                          ? 'text-muted-foreground hover:bg-muted/50 cursor-pointer'
-                          : 'text-muted-foreground/50'
+            <div className="overflow-x-auto pb-1">
+              <div className="flex w-max min-w-full items-center gap-2">
+                {STEPS.map((s, i) => (
+                  <div key={s.id} className="flex shrink-0 items-center">
+                    <button
+                      type="button"
+                      aria-current={i === step ? 'step' : undefined}
+                      onClick={() => { if (i < step || (i > step && canGoNext())) setStep(i) }}
+                      disabled={i > step && !canGoNext()}
+                      className={cn(
+                        'flex min-w-[7.5rem] items-center gap-2 rounded-lg px-2.5 py-2 text-[11px] transition-colors sm:min-w-[8.5rem] sm:text-xs',
+                        i === step
+                          ? 'bg-primary/10 text-primary font-medium'
+                          : i < step
+                            ? 'text-muted-foreground hover:bg-muted/50 cursor-pointer'
+                            : 'text-muted-foreground/50'
+                      )}
+                    >
+                      <div className={cn(
+                        'flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold',
+                        i === step
+                          ? 'bg-primary text-primary-foreground'
+                          : i < step
+                            ? 'bg-primary/20 text-primary'
+                            : 'bg-muted text-muted-foreground/50'
+                      )}>
+                        {i < step ? <Check className="h-3 w-3" /> : i + 1}
+                      </div>
+                      <span className="whitespace-nowrap">{s.title}</span>
+                    </button>
+                    {i < STEPS.length - 1 && (
+                      <div className={cn(
+                        'ml-2 h-px w-4 shrink-0',
+                        i < step ? 'bg-primary/30' : 'bg-border'
+                      )} />
                     )}
-                  >
-                    <div className={cn(
-                      'flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-bold',
-                      i === step
-                        ? 'bg-primary text-primary-foreground'
-                        : i < step
-                          ? 'bg-primary/20 text-primary'
-                          : 'bg-muted text-muted-foreground/50'
-                    )}>
-                      {i < step ? <Check className="h-3 w-3" /> : i + 1}
-                    </div>
-                    <span className="truncate hidden sm:inline">{s.title}</span>
-                  </button>
-                  {i < STEPS.length - 1 && (
-                    <div className={cn(
-                      'h-px w-3 shrink-0',
-                      i < step ? 'bg-primary/30' : 'bg-border'
-                    )} />
-                  )}
-                </div>
-              ))}
+                  </div>
+                ))}
+              </div>
             </div>
           </div>
 
@@ -536,9 +539,9 @@ export function Agents() {
                             className="mt-0.5 accent-primary"
                           />
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-sm">{toolkit.name}</span>
-                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="truncate font-medium text-sm">{toolkit.name}</span>
+                              <Badge variant="secondary" className="shrink-0 text-[10px] px-1.5 py-0 h-4">
                                 {toolkit.tools.length} 工具
                               </Badge>
                             </div>
@@ -616,8 +619,8 @@ export function Agents() {
                             className="mt-0.5 accent-violet-500"
                           />
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-sm">{wf.name}</span>
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="truncate font-medium text-sm">{wf.name}</span>
                             </div>
                             <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
                               {wf.description || '暂无描述'}
@@ -682,10 +685,10 @@ export function Agents() {
                             className="mt-0.5 accent-emerald-500"
                           />
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-sm">{kb.name}</span>
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="truncate font-medium text-sm">{kb.name}</span>
                               {kb.files && kb.files.length > 0 && (
-                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                                <Badge variant="secondary" className="shrink-0 text-[10px] px-1.5 py-0 h-4">
                                   {kb.files.length} 文件
                                 </Badge>
                               )}
@@ -842,9 +845,9 @@ export function Agents() {
                             className="mt-0.5 accent-orange-500"
                           />
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <span className="font-medium text-sm">{sk.name}</span>
-                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <span className="truncate font-medium text-sm">{sk.name}</span>
+                              <Badge variant="secondary" className="shrink-0 text-[10px] px-1.5 py-0 h-4">
                                 {sk.type === 'SYSTEM' ? '系统' : '自建'}
                               </Badge>
                             </div>
