@@ -302,11 +302,14 @@ class ApiClient {
   }
 
   async linkKnowledgeBaseToAgent(knowledgeBaseId: string, agentId: string): Promise<any> {
-    return this.post<any>(`knowledge-base/${knowledgeBaseId}/agents`, { agentId });
+    return this.post<any>(`knowledge-base/${knowledgeBaseId}/link-agent`, { agentId });
   }
 
   async unlinkKnowledgeBaseFromAgent(knowledgeBaseId: string, agentId: string): Promise<void> {
-    return this.delete<void>(`knowledge-base/${knowledgeBaseId}/agents/${agentId}`);
+    return this.request<void>(`knowledge-base/${knowledgeBaseId}/unlink-agent`, {
+      method: 'DELETE',
+      body: JSON.stringify({ agentId }),
+    });
   }
 
   // Access Token APIs

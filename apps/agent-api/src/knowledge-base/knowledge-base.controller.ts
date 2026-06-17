@@ -56,12 +56,11 @@ export class KnowledgeBaseController {
     @Body() updateKnowledgeBaseDto: UpdateKnowledgeBaseDto,
     @CurrentUser() user: CurrentUserPayload,
   ) {
-    await this.knowledgeBaseService.updateKnowledgeBase(
+    return this.knowledgeBaseService.updateKnowledgeBase(
       user.userId,
       id,
       updateKnowledgeBaseDto,
     );
-    return { message: 'Knowledge base updated successfully' };
   }
 
   @Delete(':id')

@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Injectable,
   ForbiddenException,
   Logger,
@@ -42,6 +43,16 @@ export class KnowledgeBaseService {
     } catch {
       await fs.mkdir(directoryPath || this.uploadDir, { recursive: true });
     }
+  }
+
+  private async invalidateKnowledgeBaseCache(
+    userId?: string,
+    knowledgeBaseId?: string,
+  ) {
+    const keys = ['knowledge-bases:all'];
+    if (userId) keys.push(`user:${userId}:knowledge-bases`);
+    if (knowledgeBaseId) keys.push(`kb:${knowledgeBaseId}`);
+    await this.redis.del(...keys);
   }
 
   private ensureLlamaIndexSettings() {
@@ -136,7 +147,7 @@ export class KnowledgeBaseService {
     userId: string | undefined,
     knowledgeBaseId: string,
     updateKnowledgeBaseDto: UpdateKnowledgeBaseDto,
-  ): Promise<void> {
+  ) {
     const knowledgeBase = await this.prisma.knowledgeBase.findUnique({
       where: { id: knowledgeBaseId },
     });
@@ -151,14 +162,17 @@ export class KnowledgeBaseService {
       );
     }
 
-    await this.prisma.knowledgeBase.update({
+    const updatedKnowledgeBase = await this.prisma.knowledgeBase.update({
       where: { id: knowledgeBaseId },
       data: updateKnowledgeBaseDto,
+      include: {
+        files: true,
+      },
     });
 
-    // 失效缓存
-    await this.redis.del(`kb:${knowledgeBaseId}`);
-    if (userId) await this.redis.del(`user:${userId}:knowledge-bases`);
+    await this.invalidateKnowledgeBaseCache(userId, knowledgeBaseId);
+
+    return updatedKnowledgeBase;
   }
 
   async createKnowledgeBase(userId: string | undefined, name: string, description: string) {
@@ -174,8 +188,7 @@ export class KnowledgeBaseService {
 
     await this.createVectorStore(vectorStoreName);
 
-    // 失效缓存
-    if (userId) await this.redis.del(`user:${userId}:knowledge-bases`);
+    await this.invalidateKnowledgeBaseCache(userId);
 
     return knowledgeBase;
   }
@@ -202,15 +215,18 @@ export class KnowledgeBaseService {
       where: { knowledgeBaseId },
     });
 
+    const files = await this.prisma.file.findMany({
+      where: { knowledgeBaseId },
+      select: { path: true },
+    });
+
     await this.prisma.file.deleteMany({
       where: { knowledgeBaseId },
     });
 
     await this.prisma.knowledgeBase.delete({ where: { id: knowledgeBaseId } });
 
-    // 失效缓存
-    await this.redis.del(`kb:${knowledgeBaseId}`);
-    if (userId) await this.redis.del(`user:${userId}:knowledge-bases`);
+    await this.invalidateKnowledgeBaseCache(userId, knowledgeBaseId);
 
     try {
       const vectorStore = await this.createVectorStore(
@@ -220,6 +236,10 @@ export class KnowledgeBaseService {
     } catch (error: any) {
       this.logger.error(`Failed to clear vector store: ${error?.message || error}`);
     }
+
+    await Promise.all(
+      files.map((file) => this.removePhysicalFile(file.path)),
+    );
   }
 
   async uploadFile(
@@ -228,6 +248,9 @@ export class KnowledgeBaseService {
     file: any,
   ): Promise<FileResponseDto> {
     const knowledgeBase = await this.getKnowledgeBase(userId, knowledgeBaseId);
+    if (!file?.buffer || !file?.originalname) {
+      throw new BadRequestException('No file uploaded');
+    }
 
     const fileName = Buffer.from(file.originalname, 'latin1').toString('utf8');
     const directoryPath = path.join(this.uploadDir, randomUUID());
@@ -236,7 +259,7 @@ export class KnowledgeBaseService {
 
     await fs.writeFile(filePath, file.buffer);
 
-    return await this.prisma.file.create({
+    const uploadedFile = await this.prisma.file.create({
       data: {
         path: filePath,
         name: fileName,
@@ -244,6 +267,10 @@ export class KnowledgeBaseService {
         status: FileStatus.PENDING,
       },
     });
+
+    await this.invalidateKnowledgeBaseCache(userId, knowledgeBase.id);
+
+    return uploadedFile;
   }
 
   async getFiles(
@@ -291,6 +318,7 @@ export class KnowledgeBaseService {
       where: { id: fileId },
       data: { status: FileStatus.PROCESSING },
     });
+    await this.invalidateKnowledgeBaseCache(userId, knowledgeBaseId);
 
     try {
       const reader = new LlamaParseReader({
@@ -319,16 +347,37 @@ export class KnowledgeBaseService {
 
       await index.insertNodes(nodes);
 
-      return await this.prisma.file.update({
+      const trainedFile = await this.prisma.file.update({
         where: { id: fileId },
         data: { status: FileStatus.PROCESSED },
       });
+      await this.invalidateKnowledgeBaseCache(userId, knowledgeBaseId);
+      return trainedFile;
     } catch (error) {
       this.logger.error(`Failed to train file ${file.path}:`, error);
-      return await this.prisma.file.update({
+      const failedFile = await this.prisma.file.update({
         where: { id: fileId },
         data: { status: FileStatus.FAILED },
       });
+      await this.invalidateKnowledgeBaseCache(userId, knowledgeBaseId);
+      return failedFile;
+    }
+  }
+
+  private async removePhysicalFile(filePath: string) {
+    try {
+      await fs.access(filePath);
+      await fs.unlink(filePath);
+
+      const directoryPath = path.dirname(filePath);
+      const files = await fs.readdir(directoryPath);
+      if (files.length === 0) {
+        await fs.rmdir(directoryPath);
+      }
+    } catch (error: any) {
+      this.logger.warn(
+        `Physical file ${filePath} does not exist or cannot be accessed: ${error?.message || error}`,
+      );
     }
   }
 
@@ -337,64 +386,35 @@ export class KnowledgeBaseService {
     knowledgeBaseId: string,
     fileId: string,
   ): Promise<void> {
-    return this.prisma.$transaction(async (prisma) => {
-      // 1. 验证权限和获取必要数据
-      const knowledgeBase = await this.getKnowledgeBase(
-        userId,
-        knowledgeBaseId,
-      );
-
-      const file = await prisma.file.findUnique({
-        where: { id: fileId },
-      });
-
-      if (!file || file.knowledgeBaseId !== knowledgeBaseId) {
-        throw new NotFoundException(`File not found`);
-      }
-
-      try {
-        // 2. 删除物理文件
-        try {
-          await fs.access(file.path);
-          await fs.unlink(file.path);
-
-          // 删除空目录
-          const directoryPath = path.dirname(file.path);
-          const files = await fs.readdir(directoryPath);
-          if (files.length === 0) {
-            await fs.rmdir(directoryPath);
-          }
-        } catch (error: any) {
-          // 如果文件不存在，只记录警告但继续执行
-          this.logger.warn(
-            `Physical file ${file.path} does not exist or cannot be accessed: ${error?.message || error}`,
-          );
-        }
-
-        // 3. 删除向量存储中的数据
-        try {
-          const result = await this.prisma.$executeRawUnsafe(
-            `DELETE FROM public.llamaindex_embedding WHERE collection = $1 AND metadata->>'file_id' = $2`,
-            knowledgeBase.vectorStoreName,
-            fileId,
-          );
-          this.logger.log(`[DeleteFile] Removed ${result} vector(s) for file ${fileId} from collection ${knowledgeBase.vectorStoreName}`);
-        } catch (error: any) {
-          // 记录错误但不中断流程
-          this.logger.error(
-            `Failed to delete vector store data for file ${fileId}: ${error?.message || error}`,
-          );
-        }
-
-        // 4. 删除数据库记录
-        await prisma.file.delete({
-          where: { id: fileId },
-        });
-      } catch (error: any) {
-        this.logger.error(`Failed to delete file ${fileId}: ${error?.message || error}`);
-        throw error; // 让事务回滚
-      }
+    const knowledgeBase = await this.getKnowledgeBase(userId, knowledgeBaseId);
+    const file = await this.prisma.file.findFirst({
+      where: { id: fileId, knowledgeBaseId },
     });
+
+    if (!file) {
+      throw new NotFoundException(`File not found`);
+    }
+
+    await this.prisma.file.delete({
+      where: { id: fileId },
+    });
+
+    await this.invalidateKnowledgeBaseCache(userId, knowledgeBaseId);
+
+    await this.removePhysicalFile(file.path);
+
+    try {
+      const result = await this.prisma.$executeRawUnsafe(
+        `DELETE FROM public.llamaindex_embedding WHERE collection = $1 AND metadata->>'file_id' = $2`,
+        knowledgeBase.vectorStoreName,
+        fileId,
+      );
+      this.logger.log(`[DeleteFile] Removed ${result} vector(s) for file ${fileId} from collection ${knowledgeBase.vectorStoreName}`);
+    } catch (error: any) {
+      this.logger.error(
+        `Failed to delete vector store data for file ${fileId}: ${error?.message || error}`,
+      );
+    }
   }
 
   async getIndex(knowledgeBaseId: string): Promise<VectorStoreIndex> {

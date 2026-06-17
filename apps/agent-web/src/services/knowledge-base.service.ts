@@ -1,7 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
-import type { CreateKnowledgeBaseDto, UpdateKnowledgeBaseDto, ChatWithKnowledgeBaseDto } from '../types';
+import type {
+  ChatWithKnowledgeBaseDto,
+  CreateKnowledgeBaseDto,
+  KnowledgeBase,
+  KnowledgeBaseFile,
+  UpdateKnowledgeBaseDto,
+} from '../types';
 
 // Query Options - 分离查询选项和 hooks
 export const knowledgeBaseQueryOptions = {
@@ -32,16 +38,16 @@ export const knowledgeBaseQueryOptions = {
 
 // Hooks
 export const useKnowledgeBases = () => {
-  const query = useQuery(knowledgeBaseQueryOptions.list());
-  const hasProcessing = query.data?.some((kb: any) =>
-    kb.files?.some((f: any) => f.status === 'PROCESSING'),
-  );
-  useQuery({
+  return useQuery({
     ...knowledgeBaseQueryOptions.list(),
-    refetchInterval: hasProcessing ? 3000 : false,
-    enabled: hasProcessing,
+    refetchInterval: (query) => {
+      const data = query.state.data as KnowledgeBase[] | undefined;
+      const hasProcessing = data?.some((kb) =>
+        kb.files?.some((file) => file.status === 'PROCESSING'),
+      );
+      return hasProcessing ? 3000 : false;
+    },
   });
-  return query;
 };
 
 export const useKnowledgeBase = (id: string) => {
@@ -84,6 +90,10 @@ export const useUpdateKnowledgeBase = () => {
     onSuccess: (updatedKnowledgeBase) => {
       // 更新知识库详情缓存
       queryClient.setQueryData(queryKeys.knowledgeBase(updatedKnowledgeBase.id), updatedKnowledgeBase);
+      queryClient.setQueryData<KnowledgeBase[]>(queryKeys.knowledgeBases({}), (old) => {
+        if (!old) return old;
+        return old.map((kb) => kb.id === updatedKnowledgeBase.id ? updatedKnowledgeBase : kb);
+      });
       // 使知识库列表缓存失效
       queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBases({}) });
     },
@@ -138,8 +148,53 @@ export const useUploadFileToKnowledgeBase = () => {
   return useMutation({
     mutationFn: ({ knowledgeBaseId, file }: { knowledgeBaseId: string; file: File }) =>
       apiClient.uploadFileToKnowledgeBase(knowledgeBaseId, file),
-    onSuccess: (_, { knowledgeBaseId }) => {
-      // 使知识库列表、详情和文件列表失效
+    onMutate: async ({ knowledgeBaseId, file }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.knowledgeBases({}) });
+      const previous = queryClient.getQueryData<KnowledgeBase[]>(queryKeys.knowledgeBases({}));
+      const optimisticFile: KnowledgeBaseFile = {
+        id: `uploading-${knowledgeBaseId}-${Date.now()}`,
+        name: file.name,
+        path: '',
+        status: 'PENDING',
+        knowledgeBaseId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      queryClient.setQueryData<KnowledgeBase[]>(queryKeys.knowledgeBases({}), (old) => {
+        if (!old) return old;
+        return old.map((kb) =>
+          kb.id === knowledgeBaseId
+            ? { ...kb, files: [optimisticFile, ...(kb.files || [])] }
+            : kb,
+        );
+      });
+
+      return { previous, optimisticFileId: optimisticFile.id };
+    },
+    onError: (_error, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKeys.knowledgeBases({}), context.previous);
+      }
+    },
+    onSuccess: (response, { knowledgeBaseId }, context) => {
+      const uploadedFile = response?.file as KnowledgeBaseFile | undefined;
+      if (uploadedFile && context?.optimisticFileId) {
+        queryClient.setQueryData<KnowledgeBase[]>(queryKeys.knowledgeBases({}), (old) => {
+          if (!old) return old;
+          return old.map((kb) => {
+            if (kb.id !== knowledgeBaseId) return kb;
+            return {
+              ...kb,
+              files: (kb.files || []).map((file) =>
+                file.id === context.optimisticFileId ? uploadedFile : file,
+              ),
+            };
+          });
+        });
+      }
+    },
+    onSettled: (_, __, { knowledgeBaseId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBases({}) });
       queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBase(knowledgeBaseId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBaseFiles(knowledgeBaseId) });
@@ -189,8 +244,27 @@ export const useDeleteKnowledgeBaseFile = () => {
   return useMutation({
     mutationFn: ({ knowledgeBaseId, fileId }: { knowledgeBaseId: string; fileId: string }) =>
       apiClient.deleteKnowledgeBaseFile(knowledgeBaseId, fileId),
-    onSuccess: (_, { knowledgeBaseId }) => {
-      // 使知识库列表、详情和文件列表失效
+    onMutate: async ({ knowledgeBaseId, fileId }) => {
+      await queryClient.cancelQueries({ queryKey: queryKeys.knowledgeBases({}) });
+      const previous = queryClient.getQueryData<KnowledgeBase[]>(queryKeys.knowledgeBases({}));
+
+      queryClient.setQueryData<KnowledgeBase[]>(queryKeys.knowledgeBases({}), (old) => {
+        if (!old) return old;
+        return old.map((kb) =>
+          kb.id === knowledgeBaseId
+            ? { ...kb, files: kb.files?.filter((file) => file.id !== fileId) || [] }
+            : kb,
+        );
+      });
+
+      return { previous };
+    },
+    onError: (_error, _vars, context) => {
+      if (context?.previous) {
+        queryClient.setQueryData(queryKeys.knowledgeBases({}), context.previous);
+      }
+    },
+    onSettled: (_, __, { knowledgeBaseId }) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBases({}) });
       queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBase(knowledgeBaseId) });
       queryClient.invalidateQueries({ queryKey: queryKeys.knowledgeBaseFiles(knowledgeBaseId) });
