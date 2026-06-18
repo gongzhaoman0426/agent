@@ -131,7 +131,7 @@ export class WorkflowToolkit extends BaseToolkit {
         workflowId,
         input,
         {},
-        undefined,
+        this.userId,
       );
       return JSON.stringify(result, null, 2);
     } catch (error: any) {

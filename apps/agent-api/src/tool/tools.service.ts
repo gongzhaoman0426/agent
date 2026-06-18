@@ -44,6 +44,7 @@ export class ToolsService {
       tool.toolkitId,
       settings,
       '',
+      userId,
     );
     const tools = await toolkit.getTools();
     const instancedTool = tools.find((t) => t.metadata.name === name);
