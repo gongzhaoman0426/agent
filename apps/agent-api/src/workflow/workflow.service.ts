@@ -71,7 +71,7 @@ ${JSON.stringify(agent.output, null, 2)}`
         : agent.prompt;
 
       let persistentAgent: any;
-      let tools = agent.tools || [];
+      const tools = agent.tools || [];
 
       if (workflowId) {
         const existingWorkflowAgent = await this.prismaService.workflowAgent.findFirst({
@@ -113,46 +113,6 @@ ${JSON.stringify(agent.output, null, 2)}`
             },
           });
         }
-      }
-
-      if (agent.knowledgeBases && agent.knowledgeBases.length > 0) {
-        await this.prismaService.agentKnowledgeBase.deleteMany({
-          where: { agentId: persistentAgent.id },
-        });
-
-        for (const kbId of agent.knowledgeBases) {
-          try {
-            await this.prismaService.agentKnowledgeBase.create({
-              data: {
-                agentId: persistentAgent.id,
-                knowledgeBaseId: kbId,
-              },
-            });
-          } catch (error) {
-            this.logger.warn(`Failed to link knowledge base ${kbId} to agent ${persistentAgent.id}:`, error);
-          }
-        }
-
-        const existingKbToolkit = await this.prismaService.agentToolkit.findFirst({
-          where: {
-            agentId: persistentAgent.id,
-            toolkitId: 'knowledge-base-toolkit-01',
-          },
-        });
-
-        if (!existingKbToolkit) {
-          await this.prismaService.agentToolkit.create({
-            data: {
-              agentId: persistentAgent.id,
-              toolkitId: 'knowledge-base-toolkit-01',
-              settings: {},
-            },
-          });
-        }
-
-        const kbTools = await this.toolsService.getAgentTools(persistentAgent.id);
-        const kbToolNames = kbTools.map(tool => tool.metadata?.name || tool.name);
-        tools = [...tools, ...kbToolNames];
       }
 
       const rawAgent = await this.agentService.createAgentInstance(prompt, tools, undefined, userId);
@@ -248,11 +208,6 @@ ${JSON.stringify(agent.output, null, 2)}`
       include: {
         agent: {
           include: {
-            agentKnowledgeBases: {
-              include: {
-                knowledgeBase: true,
-              },
-            },
             agentToolkits: {
               include: {
                 toolkit: true,
