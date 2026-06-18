@@ -6,7 +6,6 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { RedisService } from '../redis';
 import {
   VectorStoreIndex,
   LlamaParseReader,
@@ -31,7 +30,6 @@ export class KnowledgeBaseService {
 
   constructor(
     private prisma: PrismaService,
-    private readonly redis: RedisService,
   ) {
     this.uploadDir = path.join(process.cwd(), 'uploads');
     this.ensureUploadDirectory();
@@ -43,16 +41,6 @@ export class KnowledgeBaseService {
     } catch {
       await fs.mkdir(directoryPath || this.uploadDir, { recursive: true });
     }
-  }
-
-  private async invalidateKnowledgeBaseCache(
-    userId?: string,
-    knowledgeBaseId?: string,
-  ) {
-    const keys = ['knowledge-bases:all'];
-    if (userId) keys.push(`user:${userId}:knowledge-bases`);
-    if (knowledgeBaseId) keys.push(`kb:${knowledgeBaseId}`);
-    await this.redis.del(...keys);
   }
 
   private ensureLlamaIndexSettings() {
@@ -92,20 +80,13 @@ export class KnowledgeBaseService {
   }
 
   async getAllKnowledgeBases(userId?: string) {
-    const cacheKey = userId ? `user:${userId}:knowledge-bases` : 'knowledge-bases:all';
-    return this.redis.getOrSet(
-      cacheKey,
-      () => {
-        const whereClause = userId ? { createdById: userId } : {};
-        return this.prisma.knowledgeBase.findMany({
-          where: whereClause,
-          include: {
-            files: true,
-          },
-        });
+    const whereClause = userId ? { createdById: userId } : {};
+    return this.prisma.knowledgeBase.findMany({
+      where: whereClause,
+      include: {
+        files: true,
       },
-      300,
-    );
+    });
   }
 
   async getAgentKnowledgeBases(agentId: string) {
@@ -118,16 +99,12 @@ export class KnowledgeBaseService {
   }
 
   async getKnowledgeBase(userId: string | undefined, knowledgeBaseId: string) {
-    const knowledgeBase = await this.redis.getOrSet(
-      `kb:${knowledgeBaseId}`,
-      () => this.prisma.knowledgeBase.findUnique({
-        where: { id: knowledgeBaseId },
-        include: {
-          files: true,
-        },
-      }),
-      3600,
-    );
+    const knowledgeBase = await this.prisma.knowledgeBase.findUnique({
+      where: { id: knowledgeBaseId },
+      include: {
+        files: true,
+      },
+    });
 
     if (!knowledgeBase) {
       throw new NotFoundException(`Knowledge base with ID ${knowledgeBaseId} not found`);
@@ -170,8 +147,6 @@ export class KnowledgeBaseService {
       },
     });
 
-    await this.invalidateKnowledgeBaseCache(userId, knowledgeBaseId);
-
     return updatedKnowledgeBase;
   }
 
@@ -187,8 +162,6 @@ export class KnowledgeBaseService {
     });
 
     await this.createVectorStore(vectorStoreName);
-
-    await this.invalidateKnowledgeBaseCache(userId);
 
     return knowledgeBase;
   }
@@ -225,8 +198,6 @@ export class KnowledgeBaseService {
     });
 
     await this.prisma.knowledgeBase.delete({ where: { id: knowledgeBaseId } });
-
-    await this.invalidateKnowledgeBaseCache(userId, knowledgeBaseId);
 
     try {
       const vectorStore = await this.createVectorStore(
@@ -267,8 +238,6 @@ export class KnowledgeBaseService {
         status: FileStatus.PENDING,
       },
     });
-
-    await this.invalidateKnowledgeBaseCache(userId, knowledgeBase.id);
 
     return uploadedFile;
   }
@@ -318,7 +287,6 @@ export class KnowledgeBaseService {
       where: { id: fileId },
       data: { status: FileStatus.PROCESSING },
     });
-    await this.invalidateKnowledgeBaseCache(userId, knowledgeBaseId);
 
     try {
       const reader = new LlamaParseReader({
@@ -351,7 +319,6 @@ export class KnowledgeBaseService {
         where: { id: fileId },
         data: { status: FileStatus.PROCESSED },
       });
-      await this.invalidateKnowledgeBaseCache(userId, knowledgeBaseId);
       return trainedFile;
     } catch (error) {
       this.logger.error(`Failed to train file ${file.path}:`, error);
@@ -359,7 +326,6 @@ export class KnowledgeBaseService {
         where: { id: fileId },
         data: { status: FileStatus.FAILED },
       });
-      await this.invalidateKnowledgeBaseCache(userId, knowledgeBaseId);
       return failedFile;
     }
   }
@@ -398,8 +364,6 @@ export class KnowledgeBaseService {
     await this.prisma.file.delete({
       where: { id: fileId },
     });
-
-    await this.invalidateKnowledgeBaseCache(userId, knowledgeBaseId);
 
     await this.removePhysicalFile(file.path);
 

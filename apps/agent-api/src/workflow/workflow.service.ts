@@ -2,7 +2,6 @@ import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 
 import { AgentService } from '../agent/agent.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { RedisService } from '../redis';
 import { ToolsService } from '../tool/tools.service';
 
 import { EventBus } from './event-bus';
@@ -17,7 +16,6 @@ export class WorkflowService {
     private readonly toolsService: ToolsService,
     private readonly agentService: AgentService,
     private readonly prismaService: PrismaService,
-    private readonly redis: RedisService,
   ) {}
 
   private stripMarkdownFences(text: string): string {
@@ -199,31 +197,23 @@ ${JSON.stringify(agent.output, null, 2)}`
   }
 
   async getAllWorkflows() {
-    return this.redis.getOrSet(
-      'workflows:all',
-      () => this.prismaService.workFlow.findMany({
-        where: {
-          deleted: false,
-          source: 'code',
-        },
-        orderBy: { name: 'asc' },
-      }),
-      300,
-    );
+    return this.prismaService.workFlow.findMany({
+      where: {
+        deleted: false,
+        source: 'code',
+      },
+      orderBy: { name: 'asc' },
+    });
   }
 
   async getWorkflow(id: string, _userId?: string) {
-    const workflow = await this.redis.getOrSet(
-      `workflow:${id}`,
-      () => this.prismaService.workFlow.findFirst({
-        where: {
-          id,
-          deleted: false,
-          source: 'code',
-        },
-      }),
-      3600,
-    );
+    const workflow = await this.prismaService.workFlow.findFirst({
+      where: {
+        id,
+        deleted: false,
+        source: 'code',
+      },
+    });
 
     if (!workflow) {
       throw new NotFoundException(`Workflow with id ${id} not found`);
@@ -253,29 +243,25 @@ ${JSON.stringify(agent.output, null, 2)}`
   }
 
   async getWorkflowAgents(workflowId: string) {
-    return this.redis.getOrSet(
-      `workflow:${workflowId}:agents`,
-      () => this.prismaService.workflowAgent.findMany({
-        where: { workflowId },
-        include: {
-          agent: {
-            include: {
-              agentKnowledgeBases: {
-                include: {
-                  knowledgeBase: true,
-                },
+    return this.prismaService.workflowAgent.findMany({
+      where: { workflowId },
+      include: {
+        agent: {
+          include: {
+            agentKnowledgeBases: {
+              include: {
+                knowledgeBase: true,
               },
-              agentToolkits: {
-                include: {
-                  toolkit: true,
-                },
+            },
+            agentToolkits: {
+              include: {
+                toolkit: true,
               },
             },
           },
         },
-      }),
-      3600,
-    );
+      },
+    });
   }
 
   async deleteWorkflowAgents(workflowId: string) {
@@ -293,8 +279,6 @@ ${JSON.stringify(agent.output, null, 2)}`
     await this.prismaService.workflowAgent.deleteMany({
       where: { workflowId },
     });
-
-    await this.redis.del(`workflow:${workflowId}:agents`);
   }
 
   async updateWorkflowAgent(workflowId: string, agentName: string, agentData: any) {
@@ -307,7 +291,7 @@ ${JSON.stringify(agent.output, null, 2)}`
       throw new Error(`Workflow agent ${agentName} not found`);
     }
 
-    const updatedAgent = await this.prismaService.agent.update({
+    return this.prismaService.agent.update({
       where: { id: workflowAgent.agentId },
       data: {
         prompt: agentData.prompt,
@@ -316,10 +300,6 @@ ${JSON.stringify(agent.output, null, 2)}`
         updatedAt: new Date(),
       },
     });
-
-    await this.redis.del(`workflow:${workflowId}:agents`);
-
-    return updatedAgent;
   }
 
   private validateDsl(dsl: any) {

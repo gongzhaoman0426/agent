@@ -1,7 +1,6 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 
 import { PrismaService } from '../prisma/prisma.service';
-import { RedisService } from '../redis';
 
 import { ToolkitsService } from './toolkits.service';
 
@@ -11,7 +10,6 @@ export class ToolsService {
   constructor(
     private toolkitsService: ToolkitsService,
     private readonly prismaService: PrismaService,
-    private readonly redis: RedisService,
   ) {}
 
   async getAgentTools(agentId: string, sessionId?: string): Promise<any[]> {
@@ -27,14 +25,10 @@ export class ToolsService {
   }
 
   async getToolByName(name: string, userId?: string) {
-    const tool = await this.redis.getOrSet(
-      `tool:name:${name}`,
-      () => this.prismaService.tool.findUnique({
-        where: { name },
-        include: { toolkit: true },
-      }),
-      3600,
-    );
+    const tool = await this.prismaService.tool.findUnique({
+      where: { name },
+      include: { toolkit: true },
+    });
     if (!tool) throw new NotFoundException(`Tool ${name} not found`);
 
     // 有 userId 时查用户级 settings，否则用 toolkit 默认 settings

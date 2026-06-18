@@ -1,6 +1,5 @@
 import { Injectable, Logger, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { RedisService } from '../redis';
 import { CreateSkillDto, UpdateSkillDto, SkillReference, SkillScript } from './skill.type';
 import { executeInSandbox } from './script-sandbox';
 
@@ -10,40 +9,29 @@ export class SkillService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly redis: RedisService,
   ) {}
 
   async findAll(userId: string) {
-    return this.redis.getOrSet(
-      `user:${userId}:skills`,
-      async () => {
-        // 查询系统级技能 + 用户自建技能
-        return this.prisma.skill.findMany({
-          where: {
-            deleted: false,
-            OR: [
-              { type: 'SYSTEM' },
-              { createdById: userId },
-            ],
-          },
-          orderBy: [
-            { type: 'asc' }, // SYSTEM 在前
-            { createdAt: 'desc' },
-          ],
-        });
+    // 查询系统级技能 + 用户自建技能
+    return this.prisma.skill.findMany({
+      where: {
+        deleted: false,
+        OR: [
+          { type: 'SYSTEM' },
+          { createdById: userId },
+        ],
       },
-      300,
-    );
+      orderBy: [
+        { type: 'asc' }, // SYSTEM 在前
+        { createdAt: 'desc' },
+      ],
+    });
   }
 
   async findOne(id: string, userId?: string) {
-    const skill = await this.redis.getOrSet(
-      `skill:${id}:full`,
-      () => this.prisma.skill.findUnique({
-        where: { id, deleted: false },
-      }),
-      3600,
-    );
+    const skill = await this.prisma.skill.findUnique({
+      where: { id, deleted: false },
+    });
 
     if (!skill) {
       throw new NotFoundException(`Skill with ID ${id} not found`);
@@ -110,9 +98,6 @@ export class SkillService {
       },
     });
 
-    // 失效缓存
-    await this.redis.del(`user:${userId}:skills`);
-
     return skill;
   }
 
@@ -151,10 +136,6 @@ export class SkillService {
       },
     });
 
-    // 失效缓存
-    await this.redis.del(`skill:${id}:full`, `user:${userId}:skills`);
-    await this.redis.delByPattern(`agent:*:skill-summaries`);
-
     return updated;
   }
 
@@ -169,10 +150,6 @@ export class SkillService {
       where: { id },
       data: { deleted: true },
     });
-
-    // 失效缓存
-    await this.redis.del(`skill:${id}:full`, `user:${userId}:skills`);
-    await this.redis.delByPattern(`agent:*:skill-summaries`);
 
     return { success: true };
   }
@@ -189,25 +166,19 @@ export class SkillService {
   }
 
   async getAgentSkillSummaries(agentId: string, userId: string): Promise<Array<{ name: string; description: string }>> {
-    return this.redis.getOrSet(
-      `agent:${agentId}:skill-summaries`,
-      async () => {
-        const agentSkills = await this.prisma.agentSkill.findMany({
-          where: { agentId },
-          include: {
-            skill: true,
-          },
-        });
-
-        return agentSkills
-          .filter(as => as.skill && !as.skill.deleted) // 过滤已删除的技能
-          .map(as => ({
-            name: as.skill.name,
-            description: as.skill.description,
-          }));
+    const agentSkills = await this.prisma.agentSkill.findMany({
+      where: { agentId },
+      include: {
+        skill: true,
       },
-      300,
-    );
+    });
+
+    return agentSkills
+      .filter(as => as.skill && !as.skill.deleted) // 过滤已删除的技能
+      .map(as => ({
+        name: as.skill.name,
+        description: as.skill.description,
+      }));
   }
 
   async assignSkillsToAgent(agentId: string, skillIds: string[], userId: string) {
@@ -232,9 +203,6 @@ export class SkillService {
       });
     }
 
-    // 失效缓存
-    await this.redis.del(`agent:${agentId}:skill-summaries`, `agent:${agentId}:full`);
-
     return { success: true };
   }
 
@@ -242,8 +210,6 @@ export class SkillService {
     await this.prisma.agentSkill.deleteMany({
       where: { agentId, skillId },
     });
-
-    await this.redis.del(`agent:${agentId}:skill-summaries`, `agent:${agentId}:full`);
 
     return { success: true };
   }

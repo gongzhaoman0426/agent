@@ -1,12 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { RedisService } from '../redis';
+import { Injectable } from '@nestjs/common';
 
 @Injectable()
 export class HealthService {
-  private readonly logger = new Logger(HealthService.name);
-
-  constructor(private readonly redisService: RedisService) {}
-
   getHealthStatus() {
     return {
       status: 'ok',
@@ -18,14 +13,12 @@ export class HealthService {
     };
   }
 
-  async getReadinessStatus() {
-    const redisOk = await this.checkDependencies();
-
+  getReadinessStatus() {
     return {
-      status: redisOk ? 'ready' : 'not ready',
+      status: 'ready',
       timestamp: new Date().toISOString(),
       checks: {
-        redis: redisOk ? 'connected' : 'disconnected',
+        application: 'ready',
       },
     };
   }
@@ -39,12 +32,4 @@ export class HealthService {
     };
   }
 
-  private async checkDependencies(): Promise<boolean> {
-    try {
-      return await this.redisService.isHealthy();
-    } catch (e) {
-      this.logger.error('Dependency check failed', e);
-      return false;
-    }
-  }
 }
