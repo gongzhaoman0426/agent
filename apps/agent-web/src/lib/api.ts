@@ -16,6 +16,8 @@ import type {
   AccessTokenCreateResponse,
   CreateSkillDto,
   UpdateSkillDto,
+  FeishuBotBinding,
+  UpsertFeishuBotBindingDto,
 } from '../types';
 
 const API_BASE_URL = '/api';
@@ -145,6 +147,21 @@ class ApiClient {
 
   async chatWithAgent(id: string, data: ChatWithAgentDto): Promise<any> {
     return this.post<any>(`agents/${id}/chat`, data);
+  }
+
+  async getAgentFeishuBotBinding(id: string): Promise<FeishuBotBinding | null> {
+    return this.get<FeishuBotBinding | null>(`agents/${id}/feishu-bot`);
+  }
+
+  async upsertAgentFeishuBotBinding(
+    id: string,
+    data: UpsertFeishuBotBindingDto,
+  ): Promise<FeishuBotBinding> {
+    return this.put<FeishuBotBinding>(`agents/${id}/feishu-bot`, data);
+  }
+
+  async deleteAgentFeishuBotBinding(id: string): Promise<void> {
+    return this.delete<void>(`agents/${id}/feishu-bot`);
   }
 
   async streamChatWithAgent(

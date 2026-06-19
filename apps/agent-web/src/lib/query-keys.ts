@@ -12,6 +12,7 @@ export const queryKeys = {
   agent: (id: string) => [...queryKeys.all, 'agents', id] as const,
   agentToolkits: (agentId: string) => [...queryKeys.all, 'agents', agentId, 'toolkits'] as const,
   agentChat: (agentId: string) => [...queryKeys.all, 'agents', agentId, 'chat'] as const,
+  agentFeishuBot: (agentId: string) => [...queryKeys.all, 'agents', agentId, 'feishu-bot'] as const,
 
   // 工具包相关查询
   toolkits: (params?: Record<string, unknown>) => [...queryKeys.all, 'toolkits', params] as const,

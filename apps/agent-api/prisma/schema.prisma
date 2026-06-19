@@ -19,6 +19,7 @@ model User {
   sessions            Session[]
   userToolkitSettings UserToolkitSettings[]
   accessTokens        AccessToken[]
+  feishuBotBindings   FeishuBotBinding[]
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
 
@@ -84,6 +85,7 @@ model Agent {
   agentKnowledgeBases  AgentKnowledgeBase[]
   agentWorkflows       AgentWorkflow[]
   agentSkills          AgentSkill[]
+  feishuBotBindings    FeishuBotBinding[]
   workflowAgents       WorkflowAgent[]
   chatSessions         ChatSession[]
   createdById          String?
@@ -308,6 +310,23 @@ model ScheduledTask {
 
   @@index([userId, enabled])
   @@map("scheduled_tasks")
+}
+
+model FeishuBotBinding {
+  id                String   @id @default(cuid())
+  agentId           String
+  agent             Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  userId            String
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  appId             String   @unique @map("app_id")
+  appSecret         String   @map("app_secret")
+  enabled           Boolean  @default(true)
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@index([agentId])
+  @@index([userId])
+  @@map("feishu_bot_bindings")
 }
 
 model UserToolkitSettings {

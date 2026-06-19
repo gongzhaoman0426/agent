@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { apiClient } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
-import type { CreateAgentDto, ChatWithAgentDto } from '../types';
+import type { CreateAgentDto, ChatWithAgentDto, UpsertFeishuBotBindingDto } from '../types';
 
 // Query Options - 分离查询选项和 hooks
 export const agentQueryOptions = {
@@ -28,6 +28,12 @@ export const agentQueryOptions = {
     },
     enabled: !!id,
   }),
+
+  feishuBot: (id: string, enabled = true) => ({
+    queryKey: queryKeys.agentFeishuBot(id),
+    queryFn: () => apiClient.getAgentFeishuBotBinding(id),
+    enabled: !!id && enabled,
+  }),
 };
 
 // Hooks
@@ -41,6 +47,10 @@ export const useAgent = (id: string) => {
 
 export const useAgentToolkits = (id: string) => {
   return useQuery(agentQueryOptions.toolkits(id));
+};
+
+export const useAgentFeishuBotBinding = (id: string, enabled = true) => {
+  return useQuery(agentQueryOptions.feishuBot(id, enabled));
 };
 
 // Mutations
@@ -138,5 +148,30 @@ export const useChatWithAgent = () => {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: ChatWithAgentDto }) =>
       apiClient.chatWithAgent(id, data),
+  });
+};
+
+export const useUpsertAgentFeishuBotBinding = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({ id, data }: { id: string; data: UpsertFeishuBotBindingDto }) =>
+      apiClient.upsertAgentFeishuBotBinding(id, data),
+    onSuccess: (binding, { id }) => {
+      queryClient.setQueryData(queryKeys.agentFeishuBot(id), binding);
+      queryClient.invalidateQueries({ queryKey: queryKeys.agents({}) });
+    },
+  });
+};
+
+export const useDeleteAgentFeishuBotBinding = () => {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (id: string) => apiClient.deleteAgentFeishuBotBinding(id),
+    onSuccess: (_, id) => {
+      queryClient.setQueryData(queryKeys.agentFeishuBot(id), null);
+      queryClient.invalidateQueries({ queryKey: queryKeys.agents({}) });
+    },
   });
 };

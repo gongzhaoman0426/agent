@@ -13,6 +13,7 @@ import { AuthModule } from './auth/auth.module';
 import { ScheduledTaskModule } from './scheduled-task/scheduled-task.module';
 import { AccessTokenModule } from './access-token/access-token.module';
 import { SkillModule } from './skill/skill.module';
+import { FeishuModule } from './feishu/feishu.module';
 
 @Module({
   imports: [
@@ -31,6 +32,7 @@ import { SkillModule } from './skill/skill.module';
     ScheduledTaskModule,
     AccessTokenModule,
     SkillModule,
+    FeishuModule,
   ],
   controllers: [],
   providers: [],

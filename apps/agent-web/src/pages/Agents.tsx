@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/ui/components/card'
 import { Button } from '@/ui/components/button'
@@ -10,8 +10,8 @@ import { Textarea } from '@/ui/components/textarea'
 import { Separator } from '@/ui/components/separator'
 import { cn } from '@/ui/lib/utils'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/ui/components/tabs'
-import { Bot, Plus, MessageSquare, Trash2, Wrench, BookOpen, Sparkles, ChevronRight, ChevronLeft, Check, Pencil, GitBranch, Code, Copy, CheckCheck, Key, Zap } from 'lucide-react'
-import { useAgents, useCreateAgent, useDeleteAgent, useUpdateAgent } from '../services/agent.service'
+import { Bot, Plus, MessageSquare, Trash2, Wrench, BookOpen, Sparkles, ChevronRight, ChevronLeft, Check, Pencil, GitBranch, Code, Copy, CheckCheck, Key, Zap, Send } from 'lucide-react'
+import { useAgents, useCreateAgent, useDeleteAgent, useUpdateAgent, useAgentFeishuBotBinding, useUpsertAgentFeishuBotBinding, useDeleteAgentFeishuBotBinding } from '../services/agent.service'
 import { useToolkits } from '../services/toolkit.service'
 import { useKnowledgeBases } from '../services/knowledge-base.service'
 import { useWorkflows } from '../services/workflow.service'
@@ -58,9 +58,15 @@ export function Agents() {
   const [step, setStep] = useState(0)
   const [formData, setFormData] = useState<CreateAgentDto>({ ...initialFormData })
   const [apiDialogAgent, setApiDialogAgent] = useState<{ id: string; name: string } | null>(null)
+  const [feishuDialogAgent, setFeishuDialogAgent] = useState<{ id: string; name: string } | null>(null)
   const [copiedBlock, setCopiedBlock] = useState<string | null>(null)
   const [tokenName, setTokenName] = useState('')
   const [newlyCreatedToken, setNewlyCreatedToken] = useState<string | null>(null)
+  const [feishuForm, setFeishuForm] = useState({
+    appId: '',
+    appSecret: '',
+    enabled: true,
+  })
 
   // 技能内联创建/编辑状态
   const [skillFormOpen, setSkillFormOpen] = useState(false)
@@ -70,13 +76,99 @@ export function Agents() {
   const { data: accessTokens = [] } = useAccessTokens()
   const createTokenMutation = useCreateAccessToken()
   const deleteTokenMutation = useDeleteAccessToken()
+  const { data: feishuBinding, isLoading: feishuBindingLoading } = useAgentFeishuBotBinding(
+    feishuDialogAgent?.id || '',
+    !!feishuDialogAgent,
+  )
+  const upsertFeishuBotMutation = useUpsertAgentFeishuBotBinding()
+  const deleteFeishuBotMutation = useDeleteAgentFeishuBotBinding()
 
   const loading = agentsLoading || toolkitsLoading || kbLoading || wfLoading || skillsLoading
+
+  useEffect(() => {
+    if (!feishuDialogAgent) return
+
+    if (feishuBinding) {
+      setFeishuForm({
+        appId: feishuBinding.appId,
+        appSecret: '',
+        enabled: feishuBinding.enabled,
+      })
+    } else if (feishuBinding === null) {
+      setFeishuForm({
+        appId: '',
+        appSecret: '',
+        enabled: true,
+      })
+    }
+  }, [feishuBinding, feishuDialogAgent])
 
   const handleCopy = (text: string, blockId: string) => {
     navigator.clipboard.writeText(text)
     setCopiedBlock(blockId)
     setTimeout(() => setCopiedBlock(null), 2000)
+  }
+
+  const openFeishuDialog = (agent: { id: string; name: string }) => {
+    setFeishuForm({
+      appId: '',
+      appSecret: '',
+      enabled: true,
+    })
+    setFeishuDialogAgent(agent)
+  }
+
+  const closeFeishuDialog = () => {
+    setFeishuDialogAgent(null)
+    setFeishuForm({
+      appId: '',
+      appSecret: '',
+      enabled: true,
+    })
+  }
+
+  const handleSaveFeishuBinding = async () => {
+    if (!feishuDialogAgent) return
+    if (!feishuForm.appId.trim()) return
+    if (!feishuBinding && !feishuForm.appSecret.trim()) return
+
+    try {
+      await upsertFeishuBotMutation.mutateAsync({
+        id: feishuDialogAgent.id,
+        data: {
+          appId: feishuForm.appId.trim(),
+          appSecret: feishuForm.appSecret.trim() || undefined,
+          enabled: feishuForm.enabled,
+        },
+      })
+      closeFeishuDialog()
+    } catch (error) {
+      await alert({
+        title: '保存失败',
+        description: (error as Error).message,
+      })
+    }
+  }
+
+  const handleDeleteFeishuBinding = async () => {
+    if (!feishuDialogAgent) return
+    const confirmed = await confirm({
+      title: '删除飞书绑定',
+      description: '确定要删除这个智能体的飞书机器人绑定吗？',
+      confirmText: '删除',
+      variant: 'destructive',
+    })
+    if (!confirmed) return
+
+    try {
+      await deleteFeishuBotMutation.mutateAsync(feishuDialogAgent.id)
+      closeFeishuDialog()
+    } catch (error) {
+      await alert({
+        title: '删除失败',
+        description: (error as Error).message,
+      })
+    }
   }
 
   const CodeBlock = ({ code, id }: { code: string; id: string }) => (
@@ -351,6 +443,14 @@ export function Agents() {
                     onClick={() => setApiDialogAgent({ id: agent.id, name: agent.name })}
                   >
                     <Code className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground hover:text-primary"
+                    onClick={() => openFeishuDialog(agent)}
+                  >
+                    <Send className="h-3.5 w-3.5" />
                   </Button>
                   <Button
                     variant="ghost"
@@ -1309,6 +1409,108 @@ print(data["response"])`} />
                 </div>
               </div>
             )}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* 飞书机器人绑定 */}
+      <Dialog open={!!feishuDialogAgent} onOpenChange={(open) => { if (!open) closeFeishuDialog() }}>
+        <DialogContent className="max-w-xl max-h-[85vh] flex flex-col gap-0 p-0 overflow-hidden">
+          <div className="px-6 pt-6 pb-4">
+            <DialogHeader>
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10">
+                  <Send className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <DialogTitle>飞书机器人绑定</DialogTitle>
+                  <DialogDescription>
+                    {feishuDialogAgent?.name}
+                  </DialogDescription>
+                </div>
+              </div>
+            </DialogHeader>
+          </div>
+          <Separator />
+          <div className="flex-1 overflow-y-auto px-6 py-5">
+            {feishuBindingLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-6 w-6 border-2 border-primary border-t-transparent"></div>
+              </div>
+            ) : (
+              <div className="space-y-5">
+                <div className="rounded-lg border bg-muted/40 p-3 text-xs leading-relaxed text-muted-foreground">
+                  在飞书开放平台进入该应用的 <span className="font-medium text-foreground">事件与回调</span>，事件订阅方式选择 <span className="font-medium text-foreground">使用长连接接收事件</span>，然后添加 <span className="font-medium text-foreground">接收消息 v2.0</span> 事件并发布应用。
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="feishu-app-id">App ID <span className="text-destructive">*</span></Label>
+                  <Input
+                    id="feishu-app-id"
+                    value={feishuForm.appId}
+                    onChange={(e) => setFeishuForm({ ...feishuForm, appId: e.target.value })}
+                    placeholder="cli_xxx"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="feishu-app-secret">
+                    App Secret {!feishuBinding && <span className="text-destructive">*</span>}
+                  </Label>
+                  <Input
+                    id="feishu-app-secret"
+                    type="password"
+                    value={feishuForm.appSecret}
+                    onChange={(e) => setFeishuForm({ ...feishuForm, appSecret: e.target.value })}
+                    placeholder={feishuBinding?.appSecretConfigured ? '留空则保留已保存的密钥' : '飞书应用密钥'}
+                  />
+                </div>
+
+                <label className="flex items-center gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    checked={feishuForm.enabled}
+                    onChange={(e) => setFeishuForm({ ...feishuForm, enabled: e.target.checked })}
+                    className="accent-primary"
+                  />
+                  启用绑定
+                </label>
+              </div>
+            )}
+          </div>
+          <Separator />
+          <div className="flex items-center justify-between px-6 py-4">
+            <div>
+              {feishuBinding && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-destructive hover:text-destructive"
+                  onClick={handleDeleteFeishuBinding}
+                  disabled={deleteFeishuBotMutation.isPending}
+                >
+                  <Trash2 className="h-3.5 w-3.5 mr-1" />
+                  删除绑定
+                </Button>
+              )}
+            </div>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" size="sm" onClick={closeFeishuDialog}>
+                取消
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSaveFeishuBinding}
+                disabled={
+                  feishuBindingLoading ||
+                  upsertFeishuBotMutation.isPending ||
+                  !feishuForm.appId.trim() ||
+                  (!feishuBinding && !feishuForm.appSecret.trim())
+                }
+              >
+                {upsertFeishuBotMutation.isPending ? '保存中...' : '保存'}
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>

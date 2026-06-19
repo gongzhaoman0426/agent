@@ -20,6 +20,22 @@ export interface Agent {
   agentSkills?: AgentSkill[];
 }
 
+export interface FeishuBotBinding {
+  id: string;
+  agentId: string;
+  appId: string;
+  enabled: boolean;
+  appSecretConfigured: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface UpsertFeishuBotBindingDto {
+  appId: string;
+  appSecret?: string;
+  enabled?: boolean;
+}
+
 export interface Toolkit {
   id: string;
   name: string;
