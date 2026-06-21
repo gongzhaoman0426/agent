@@ -7,12 +7,12 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
 import { AccessTokenModule } from '../access-token/access-token.module';
 import { SkillDiscoveryService } from './skill-discovery.service';
-import { CodeReviewSkill } from './skills/code-review.skill';
+import { TimeQuerySkill } from './skills/time-query.skill';
 
 @Module({
   imports: [PrismaModule, AuthModule, AccessTokenModule, DiscoveryModule],
   controllers: [SkillController],
-  providers: [SkillService, SkillDiscoveryService, CodeReviewSkill],
+  providers: [SkillService, SkillDiscoveryService, TimeQuerySkill],
   exports: [SkillService, SkillDiscoveryService],
 })
 export class SkillModule {}
