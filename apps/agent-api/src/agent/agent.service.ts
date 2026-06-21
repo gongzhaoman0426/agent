@@ -133,7 +133,6 @@ export class AgentService {
   }
 
   private async assignToolkitsToAgent(agentId: string, dto: CreateAgentDto | UpdateAgentDto) {
-    const alwaysIncludeToolkitIds = ['common-toolkit-01', 'skill-toolkit-01'];
     const toolkitConfigs: Array<{ toolkitId: string; settings: any }> = [];
 
     // 如果提供了工具包配置
@@ -142,16 +141,6 @@ export class AgentService {
         toolkitId: tk.toolkitId,
         settings: tk.settings || {},
       })));
-    }
-
-    // 确保 common-toolkit 和 skill-toolkit 总是被包含
-    for (const toolkitId of alwaysIncludeToolkitIds) {
-      if (!toolkitConfigs.some(tk => tk.toolkitId === toolkitId)) {
-        toolkitConfigs.unshift({
-          toolkitId,
-          settings: {},
-        });
-      }
     }
 
     // 为智能体分配工具包
@@ -257,6 +246,12 @@ export class AgentService {
         skipDuplicates: true,
       });
     }
+  }
+
+  private hasAgentToolkit(agent: { agentToolkits?: Array<{ toolkitId?: string; toolkit?: { id?: string } }> }, toolkitId: string) {
+    return agent.agentToolkits?.some((agentToolkit) =>
+      agentToolkit.toolkitId === toolkitId || agentToolkit.toolkit?.id === toolkitId,
+    ) || false;
   }
 
   async update(id: string, updateAgentDto: UpdateAgentDto, userId: string) {
@@ -453,8 +448,10 @@ export class AgentService {
     const tools = await this.toolsService.getAgentTools(agentId, sessionId);
     this.logger.log(`[Chat] Available tools: ${tools.map((t: any) => t.metadata?.name || t.name).join(', ')}`);
 
-    // 获取智能体的技能摘要
-    const skillSummaries = await this.skillService.getAgentSkillSummaries(agentId, userId);
+    // 只有勾选技能工具箱时，已选择的技能才会进入提示词并可通过 useSkill 生效
+    const skillSummaries = this.hasAgentToolkit(agent, 'skill-toolkit-01')
+      ? await this.skillService.getAgentSkillSummaries(agentId, userId)
+      : [];
 
     // 处理聊天记忆：裁剪历史 + RAG 检索 + 增强 prompt
     const { enhancedPrompt, recentHistory } =
@@ -572,8 +569,10 @@ export class AgentService {
     const tools = await this.toolsService.getAgentTools(agentId, sessionId);
     this.logger.log(`[ChatStream] Available tools: ${tools.map((t: any) => t.metadata?.name || t.name).join(', ')}`);
 
-    // 获取智能体的技能摘要
-    const skillSummaries = await this.skillService.getAgentSkillSummaries(agentId, userId);
+    // 只有勾选技能工具箱时，已选择的技能才会进入提示词并可通过 useSkill 生效
+    const skillSummaries = this.hasAgentToolkit(agent, 'skill-toolkit-01')
+      ? await this.skillService.getAgentSkillSummaries(agentId, userId)
+      : [];
 
     // 处理聊天记忆
     const { enhancedPrompt, recentHistory } =
