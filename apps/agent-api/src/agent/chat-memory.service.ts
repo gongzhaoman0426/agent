@@ -266,7 +266,7 @@ ${block}
       '如果用户要求删除所有定时任务，你必须先调用 listScheduledTasks 获取列表，再调用 deleteScheduledTask 删除。',
     );
 
-    // 技能系统提示词（始终注入，即使当前无技能也要告知 Agent 可以创建）
+    // 技能系统提示词
     const skillLines: string[] = [];
 
     if (skills && skills.length > 0) {
@@ -279,14 +279,9 @@ ${block}
         '',
         `<available_skills>\n${skillsXml}\n</available_skills>`,
       );
+    } else {
+      skillLines.push('当前没有可用技能。');
     }
-
-    skillLines.push(
-      '',
-      '当用户明确要求将某个流程、规范或方法论保存为技能时，调用 createSkill 工具创建。',
-      '当用户明确要求修改已有技能时，调用 updateSkill 工具更新。',
-      '不要主动建议创建技能，仅在用户明确要求时执行。',
-    );
 
     contextParts.push('\n\n## 技能系统\n' + skillLines.join('\n'));
 

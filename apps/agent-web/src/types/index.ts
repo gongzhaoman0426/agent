@@ -80,7 +80,7 @@ export interface Skill {
   name: string;
   description: string;
   content: string;
-  type: 'SYSTEM' | 'USER';
+  type: 'SYSTEM';
   references: SkillReference[];
   scripts: SkillScript[];
   createdById?: string;
@@ -107,22 +107,6 @@ export interface AgentSkill {
   agentId: string;
   skillId: string;
   skill: Skill;
-}
-
-export interface CreateSkillDto {
-  name: string;
-  description: string;
-  content: string;
-  references?: SkillReference[];
-  scripts?: SkillScript[];
-}
-
-export interface UpdateSkillDto {
-  name?: string;
-  description?: string;
-  content?: string;
-  references?: SkillReference[];
-  scripts?: SkillScript[];
 }
 
 export interface Workflow {

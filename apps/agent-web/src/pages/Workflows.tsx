@@ -1,13 +1,12 @@
 import { useState } from 'react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/ui/components/card'
 import { Button } from '@/ui/components/button'
-import { Badge } from '@/ui/components/badge'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/ui/components/dialog'
 import { Input } from '@/ui/components/input'
 import { Label } from '@/ui/components/label'
 import { Textarea } from '@/ui/components/textarea'
 import { Separator } from '@/ui/components/separator'
-import { AlertCircle, CheckCircle2, Code2, FileCode, GitBranch, Play } from 'lucide-react'
+import { AlertCircle, CheckCircle2, FileCode, GitBranch, Play } from 'lucide-react'
 import { useExecuteWorkflow, useWorkflows } from '../services/workflow.service'
 import type { Workflow } from '../types'
 
@@ -22,7 +21,6 @@ export function Workflows() {
   const [executeResult, setExecuteResult] = useState<any>(null)
 
   const availableWorkflows = workflows.filter((workflow) => !workflow.deleted).length
-  const codeDefinedWorkflows = workflows.filter((workflow) => workflow.source === 'code').length
 
   const getStartEventFields = (workflow: Workflow | null): Record<string, string> => {
     if (!workflow?.DSL?.events) return {}
@@ -108,12 +106,12 @@ export function Workflows() {
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight">工作流管理</h1>
-            <p className="text-sm text-muted-foreground">后端代码定义的 DSL 工作流会自动同步到数据库</p>
+            <p className="text-sm text-muted-foreground">查看和执行可用的自动化流程</p>
           </div>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <div className="rounded-xl border bg-card p-4">
           <div className="flex items-center gap-3">
             <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-violet-500/10">
@@ -122,17 +120,6 @@ export function Workflows() {
             <div>
               <p className="text-2xl font-bold">{workflows.length}</p>
               <p className="text-xs text-muted-foreground">工作流总数</p>
-            </div>
-          </div>
-        </div>
-        <div className="rounded-xl border bg-card p-4">
-          <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/10">
-              <Code2 className="h-4 w-4 text-blue-500" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold">{codeDefinedWorkflows}</p>
-              <p className="text-xs text-muted-foreground">代码定义</p>
             </div>
           </div>
         </div>
@@ -167,9 +154,6 @@ export function Workflows() {
                       </CardDescription>
                     </div>
                   </div>
-                  <Badge variant="secondary" className="shrink-0 text-xs">
-                    代码定义
-                  </Badge>
                 </div>
               </CardHeader>
               <CardContent className="space-y-3 pt-0">

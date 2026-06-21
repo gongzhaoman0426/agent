@@ -122,7 +122,7 @@ export function Toolkits() {
           </div>
           <div>
             <h1 className="text-2xl font-bold tracking-tight">工具包管理</h1>
-            <p className="text-sm text-muted-foreground">查看系统中可用的工具包和工具</p>
+            <p className="text-sm text-muted-foreground">查看可用的工具包和工具</p>
           </div>
         </div>
       </div>
@@ -256,7 +256,7 @@ export function Toolkits() {
             </div>
             <h3 className="text-lg font-semibold mb-1">暂无工具包</h3>
             <p className="text-sm text-muted-foreground text-center max-w-sm">
-              系统中还没有可用的工具包
+              还没有可用的工具包
             </p>
           </CardContent>
         </Card>

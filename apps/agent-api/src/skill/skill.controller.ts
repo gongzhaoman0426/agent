@@ -2,14 +2,13 @@ import {
   Controller,
   Get,
   Post,
-  Patch,
   Delete,
   Body,
   Param,
   UseGuards,
 } from '@nestjs/common';
 import { SkillService } from './skill.service';
-import { CreateSkillDto, UpdateSkillDto, AssignSkillsDto } from './skill.type';
+import { AssignSkillsDto } from './skill.type';
 import { CurrentUser } from '../auth/current-user.decorator';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import type { CurrentUserPayload } from '../auth/auth.type';
@@ -22,33 +21,6 @@ export class SkillController {
   @Get()
   async findAll(@CurrentUser() user: CurrentUserPayload) {
     return this.skillService.findAll(user.userId);
-  }
-
-  @Get(':id')
-  async findOne(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
-    return this.skillService.findOne(id, user.userId);
-  }
-
-  @Post()
-  async create(
-    @Body() createSkillDto: CreateSkillDto,
-    @CurrentUser() user: CurrentUserPayload,
-  ) {
-    return this.skillService.create(createSkillDto, user.userId);
-  }
-
-  @Patch(':id')
-  async update(
-    @Param('id') id: string,
-    @Body() updateSkillDto: UpdateSkillDto,
-    @CurrentUser() user: CurrentUserPayload,
-  ) {
-    return this.skillService.update(id, updateSkillDto, user.userId);
-  }
-
-  @Delete(':id')
-  async remove(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
-    return this.skillService.remove(id, user.userId);
   }
 
   // ========== Agent 技能关联 ==========
@@ -80,5 +52,10 @@ export class SkillController {
     @Param('skillId') skillId: string,
   ) {
     return this.skillService.removeSkillFromAgent(agentId, skillId);
+  }
+
+  @Get(':id')
+  async findOne(@Param('id') id: string, @CurrentUser() user: CurrentUserPayload) {
+    return this.skillService.findOne(id, user.userId);
   }
 }

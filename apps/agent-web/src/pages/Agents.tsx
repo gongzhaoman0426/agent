@@ -15,7 +15,7 @@ import { useAgents, useCreateAgent, useDeleteAgent, useUpdateAgent, useAgentFeis
 import { useToolkits } from '../services/toolkit.service'
 import { useKnowledgeBases } from '../services/knowledge-base.service'
 import { useWorkflows } from '../services/workflow.service'
-import { useSkills, useCreateSkill, useUpdateSkill } from '../services/skill.service'
+import { useSkills } from '../services/skill.service'
 import { useAccessTokens, useCreateAccessToken, useDeleteAccessToken } from '../services/access-token.service'
 import { useConfirmDialog } from '../hooks/use-confirm-dialog'
 import type { CreateAgentDto } from '../types'
@@ -25,7 +25,7 @@ const STEPS = [
   { id: 1, title: '工具包', description: '选择功能工具' },
   { id: 2, title: '工作流', description: '绑定可用工作流' },
   { id: 3, title: '知识库', description: '关联知识文档' },
-  { id: 4, title: '技能', description: '选择或创建技能' },
+  { id: 4, title: '技能', description: '选择可用技能' },
   { id: 5, title: '确认创建', description: '检查并提交' },
 ]
 
@@ -49,8 +49,6 @@ export function Agents() {
   const createAgentMutation = useCreateAgent()
   const updateAgentMutation = useUpdateAgent()
   const deleteAgentMutation = useDeleteAgent()
-  const createSkillMutation = useCreateSkill()
-  const updateSkillMutation = useUpdateSkill()
   const { confirm, alert, ConfirmDialog } = useConfirmDialog()
 
   const [createDialogOpen, setCreateDialogOpen] = useState(false)
@@ -67,11 +65,6 @@ export function Agents() {
     appSecret: '',
     enabled: true,
   })
-
-  // 技能内联创建/编辑状态
-  const [skillFormOpen, setSkillFormOpen] = useState(false)
-  const [editingSkillId, setEditingSkillId] = useState<string | null>(null)
-  const [skillForm, setSkillForm] = useState({ name: '', description: '', content: '' })
 
   const { data: accessTokens = [] } = useAccessTokens()
   const createTokenMutation = useCreateAccessToken()
@@ -581,7 +574,7 @@ export function Agents() {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="prompt">系统提示词 <span className="text-destructive">*</span></Label>
+                  <Label htmlFor="prompt">角色提示词 <span className="text-destructive">*</span></Label>
                   <Textarea
                     id="prompt"
                     value={formData.prompt}
@@ -735,7 +728,7 @@ export function Agents() {
                     <GitBranch className="h-8 w-8 mx-auto mb-2 opacity-30" />
                     <p className="text-sm">暂无可用的工作流</p>
                     <p className="text-xs mt-1">
-                      在后端添加代码定义后，工作流会自动同步到这里
+                      暂无已配置的工作流
                     </p>
                   </div>
                 )}
@@ -816,98 +809,11 @@ export function Agents() {
             {/* Step 4: 技能 */}
             {step === 4 && (
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
+                <div>
                   <p className="text-sm text-muted-foreground">
-                    选择已有技能或创建新技能。技能是引导智能体行为的指令文档。此步骤可选。
+                    选择可用技能，为智能体补充特定场景的行为指令。此步骤可选。
                   </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="gap-1.5 shrink-0"
-                    onClick={() => {
-                      setEditingSkillId(null)
-                      setSkillForm({ name: '', description: '', content: '' })
-                      setSkillFormOpen(true)
-                    }}
-                  >
-                    <Plus className="h-3.5 w-3.5" />
-                    新建技能
-                  </Button>
                 </div>
-
-                {/* 内联技能表单 */}
-                {skillFormOpen && (
-                  <div className="rounded-lg border-2 border-orange-500/30 bg-orange-500/5 p-4 space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium">{editingSkillId ? '编辑技能' : '新建技能'}</span>
-                      <Button variant="ghost" size="sm" onClick={() => setSkillFormOpen(false)} className="h-7 px-2 text-xs">
-                        取消
-                      </Button>
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="skill-name">名称 <span className="text-destructive">*</span></Label>
-                      <Input
-                        id="skill-name"
-                        value={skillForm.name}
-                        onChange={(e) => setSkillForm({ ...skillForm, name: e.target.value })}
-                        placeholder="英文短横线命名，如 code-review"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="skill-desc">描述 <span className="text-destructive">*</span></Label>
-                      <Input
-                        id="skill-desc"
-                        value={skillForm.description}
-                        onChange={(e) => setSkillForm({ ...skillForm, description: e.target.value })}
-                        placeholder="简要描述技能的用途"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label htmlFor="skill-content">技能指令 <span className="text-destructive">*</span></Label>
-                      <Textarea
-                        id="skill-content"
-                        value={skillForm.content}
-                        onChange={(e) => setSkillForm({ ...skillForm, content: e.target.value })}
-                        placeholder="完整的技能指令内容（Markdown 格式）..."
-                        className="min-h-[120px] font-mono text-xs"
-                      />
-                    </div>
-                    <div className="flex justify-end">
-                      <Button
-                        size="sm"
-                        disabled={!skillForm.name.trim() || !skillForm.description.trim() || !skillForm.content.trim() || createSkillMutation.isPending || updateSkillMutation.isPending}
-                        onClick={async () => {
-                          try {
-                            if (editingSkillId) {
-                              await updateSkillMutation.mutateAsync({
-                                id: editingSkillId,
-                                data: { name: skillForm.name, description: skillForm.description, content: skillForm.content },
-                              })
-                            } else {
-                              const newSkill = await createSkillMutation.mutateAsync({
-                                name: skillForm.name,
-                                description: skillForm.description,
-                                content: skillForm.content,
-                              })
-                              // 自动选中新创建的技能
-                              setFormData({
-                                ...formData,
-                                skills: [...(formData.skills || []), newSkill.id],
-                              })
-                            }
-                            setSkillFormOpen(false)
-                            setEditingSkillId(null)
-                          } catch (error) {
-                            console.error('Failed to save skill:', error)
-                          }
-                        }}
-                        className="gap-1.5"
-                      >
-                        {(createSkillMutation.isPending || updateSkillMutation.isPending) ? '保存中...' : editingSkillId ? '保存修改' : '创建并选中'}
-                      </Button>
-                    </div>
-                  </div>
-                )}
 
                 {/* 技能列表 */}
                 {(skills as any[]).length > 0 ? (
@@ -947,41 +853,22 @@ export function Agents() {
                           <div className="flex-1 min-w-0">
                             <div className="flex min-w-0 items-center gap-2">
                               <span className="truncate font-medium text-sm">{sk.name}</span>
-                              <Badge variant="secondary" className="shrink-0 text-[10px] px-1.5 py-0 h-4">
-                                {sk.type === 'SYSTEM' ? '系统' : '自建'}
-                              </Badge>
                             </div>
                             <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
                               {sk.description}
                             </p>
                           </div>
-                          {sk.type === 'USER' && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="h-7 px-2 shrink-0"
-                              onClick={(e) => {
-                                e.preventDefault()
-                                e.stopPropagation()
-                                setEditingSkillId(sk.id)
-                                setSkillForm({ name: sk.name, description: sk.description, content: sk.content })
-                                setSkillFormOpen(true)
-                              }}
-                            >
-                              <Pencil className="h-3 w-3" />
-                            </Button>
-                          )}
                         </label>
                       )
                     })}
                   </div>
-                ) : !skillFormOpen ? (
+                ) : (
                   <div className="text-center py-8 text-muted-foreground">
                     <Zap className="h-8 w-8 mx-auto mb-2 opacity-30" />
                     <p className="text-sm">暂无可用的技能</p>
-                    <p className="text-xs mt-1">点击上方「新建技能」创建第一个技能</p>
+                    <p className="text-xs mt-1">暂无已配置的技能</p>
                   </div>
-                ) : null}
+                )}
               </div>
             )}
 

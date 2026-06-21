@@ -1,6 +1,6 @@
-import { Injectable, Logger, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
+import { ForbiddenException, Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateSkillDto, UpdateSkillDto, SkillReference, SkillScript } from './skill.type';
+import { SkillReference, SkillScript } from './skill.type';
 import { executeInSandbox } from './script-sandbox';
 
 @Injectable()
@@ -11,24 +11,19 @@ export class SkillService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async findAll(userId: string) {
-    // 查询系统级技能 + 用户自建技能
+  async findAll(_userId: string) {
     return this.prisma.skill.findMany({
       where: {
         deleted: false,
-        OR: [
-          { type: 'SYSTEM' },
-          { createdById: userId },
-        ],
+        type: 'SYSTEM',
       },
       orderBy: [
-        { type: 'asc' }, // SYSTEM 在前
-        { createdAt: 'desc' },
+        { name: 'asc' },
       ],
     });
   }
 
-  async findOne(id: string, userId?: string) {
+  async findOne(id: string, _userId?: string) {
     const skill = await this.prisma.skill.findUnique({
       where: { id, deleted: false },
     });
@@ -37,26 +32,14 @@ export class SkillService {
       throw new NotFoundException(`Skill with ID ${id} not found`);
     }
 
-    // 验证权限：系统技能所有人可见，用户技能只能创建者可见
-    if (userId && skill.type === 'USER' && skill.createdById !== userId) {
-      throw new ForbiddenException('无权访问此技能');
+    if (skill.type !== 'SYSTEM') {
+      throw new ForbiddenException('该技能不可用');
     }
 
     return skill;
   }
 
-  async findByName(name: string, userId: string) {
-    // 优先查找用户自建技能，回退到系统技能
-    const userSkill = await this.prisma.skill.findFirst({
-      where: {
-        name,
-        createdById: userId,
-        deleted: false,
-      },
-    });
-
-    if (userSkill) return userSkill;
-
+  async findByName(name: string, _userId: string) {
     const systemSkill = await this.prisma.skill.findFirst({
       where: {
         name,
@@ -72,109 +55,38 @@ export class SkillService {
     return systemSkill;
   }
 
-  async create(createSkillDto: CreateSkillDto, userId: string) {
-    // 检查名称冲突（同一用户下技能名唯一）
-    const existing = await this.prisma.skill.findFirst({
-      where: {
-        name: createSkillDto.name,
-        createdById: userId,
-        deleted: false,
-      },
-    });
-
-    if (existing) {
-      throw new BadRequestException(`技能名称 "${createSkillDto.name}" 已存在`);
-    }
-
-    const skill = await this.prisma.skill.create({
-      data: {
-        name: createSkillDto.name,
-        description: createSkillDto.description,
-        content: createSkillDto.content,
-        references: (createSkillDto.references || []) as any,
-        scripts: (createSkillDto.scripts || []) as any,
-        createdById: userId,
-        type: 'USER',
-      },
-    });
-
-    return skill;
-  }
-
-  async update(id: string, updateSkillDto: UpdateSkillDto, userId: string) {
-    const skill = await this.findOne(id, userId);
-
-    // 只能更新自己创建的技能
-    if (skill.createdById !== userId) {
-      throw new ForbiddenException('只能修改自己创建的技能');
-    }
-
-    // 如果修改名称，检查冲突
-    if (updateSkillDto.name && updateSkillDto.name !== skill.name) {
-      const existing = await this.prisma.skill.findFirst({
-        where: {
-          name: updateSkillDto.name,
-          createdById: userId,
-          deleted: false,
-          id: { not: id },
-        },
-      });
-
-      if (existing) {
-        throw new BadRequestException(`技能名称 "${updateSkillDto.name}" 已存在`);
-      }
-    }
-
-    const updated = await this.prisma.skill.update({
-      where: { id },
-      data: {
-        name: updateSkillDto.name,
-        description: updateSkillDto.description,
-        content: updateSkillDto.content,
-        references: updateSkillDto.references as any,
-        scripts: updateSkillDto.scripts as any,
-      },
-    });
-
-    return updated;
-  }
-
-  async remove(id: string, userId: string) {
-    const skill = await this.findOne(id, userId);
-
-    if (skill.createdById !== userId) {
-      throw new ForbiddenException('只能删除自己创建的技能');
-    }
-
-    await this.prisma.skill.update({
-      where: { id },
-      data: { deleted: true },
-    });
-
-    return { success: true };
-  }
-
   // ========== Agent 技能关联 ==========
 
-  async getAgentSkills(agentId: string, userId: string) {
+  async getAgentSkills(agentId: string, _userId: string) {
     return this.prisma.agentSkill.findMany({
-      where: { agentId },
+      where: {
+        agentId,
+        skill: {
+          deleted: false,
+          type: 'SYSTEM',
+        },
+      },
       include: {
         skill: true,
       },
     });
   }
 
-  async getAgentSkillSummaries(agentId: string, userId: string): Promise<Array<{ name: string; description: string }>> {
+  async getAgentSkillSummaries(agentId: string, _userId: string): Promise<Array<{ name: string; description: string }>> {
     const agentSkills = await this.prisma.agentSkill.findMany({
-      where: { agentId },
+      where: {
+        agentId,
+        skill: {
+          deleted: false,
+          type: 'SYSTEM',
+        },
+      },
       include: {
         skill: true,
       },
     });
 
     return agentSkills
-      .filter(as => as.skill && !as.skill.deleted) // 过滤已删除的技能
       .map(as => ({
         name: as.skill.name,
         description: as.skill.description,
