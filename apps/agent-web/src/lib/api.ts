@@ -191,10 +191,14 @@ class ApiClient {
       try { const e = await res.json(); msg = e.message || msg; } catch { /* ignore */ }
       throw new Error(msg);
     }
-    const reader = res.body!.getReader();
+    if (!res.body) {
+      throw new Error('响应不包含可读流');
+    }
+    const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = '';
     let doneData: any = null;
+    let streamError: string | null = null;
 
     while (true) {
       const { done, value } = await reader.read();
@@ -210,8 +214,14 @@ class ApiClient {
           eventName = line.slice(7);
         } else if (line.startsWith('data: ')) {
           const jsonStr = line.slice(6);
+          let parsed: any = null;
+          let parseOk = true;
           try {
-            const parsed = JSON.parse(jsonStr);
+            parsed = JSON.parse(jsonStr);
+          } catch {
+            parseOk = false;
+          }
+          if (parseOk) {
             if (eventName === 'delta') {
               callbacks.onDelta(parsed.delta);
             } else if (eventName === 'tool_call') {
@@ -220,11 +230,18 @@ class ApiClient {
               callbacks.onToolResult?.(parsed);
             } else if (eventName === 'done') {
               doneData = parsed;
+            } else if (eventName === 'error') {
+              streamError = parsed?.message || '对话流发生错误';
             }
-          } catch { /* ignore parse errors */ }
+          }
           eventName = '';
         }
+        // 以 ':' 开头的心跳注释行直接忽略
       }
+    }
+
+    if (streamError) {
+      throw new Error(streamError);
     }
 
     return doneData || { response: '', agentId: id, agentName: '' };

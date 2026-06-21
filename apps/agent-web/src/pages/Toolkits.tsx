@@ -15,6 +15,7 @@ import {
 } from '@/ui/components/dialog'
 import { Wrench, Package, ChevronDown, ChevronRight, Code, Settings } from 'lucide-react'
 import { apiClient } from '../lib/api'
+import { toast } from '../lib/toast'
 import type { Toolkit } from '../types'
 
 export function Toolkits() {
@@ -39,6 +40,7 @@ export function Toolkits() {
       setToolkits(data)
     } catch (error) {
       console.error('Failed to fetch toolkits:', error)
+      toast.error(`加载工具包失败：${(error as Error).message}`)
     } finally {
       setLoading(false)
     }
@@ -90,9 +92,11 @@ export function Toolkits() {
     setSettingsSaving(true)
     try {
       await apiClient.updateToolkitSettings(settingsToolkit.id, settingsForm)
+      toast.success('工具包配置已保存')
       setSettingsDialogOpen(false)
     } catch (error) {
       console.error('Failed to save toolkit settings:', error)
+      toast.error(`保存配置失败：${(error as Error).message}`)
     } finally {
       setSettingsSaving(false)
     }

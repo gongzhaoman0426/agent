@@ -8,10 +8,18 @@ import { KnowledgeBases } from './pages/KnowledgeBases'
 import { Skills } from './pages/Skills'
 import { Login } from './pages/Login'
 import { useAuth } from './hooks/use-auth'
+import { Loader2 } from 'lucide-react'
 import type { ReactNode } from 'react'
 
 function ProtectedRoute({ children }: { children: ReactNode }) {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, isLoading } = useAuth()
+  if (isLoading) {
+    return (
+      <div className="flex min-h-dvh items-center justify-center">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    )
+  }
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />
   }

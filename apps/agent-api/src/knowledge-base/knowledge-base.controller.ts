@@ -138,8 +138,9 @@ export class KnowledgeBaseController {
   async chat(
     @Param('id') id: string,
     @Body() chatDto: ChatWithKnowledgeBaseDto,
+    @CurrentUser() user: CurrentUserPayload,
   ) {
-    return this.knowledgeBaseService.chat(id, chatDto.message);
+    return this.knowledgeBaseService.chat(id, chatDto.message, user.userId);
   }
 
   @Post(':id/link-agent')

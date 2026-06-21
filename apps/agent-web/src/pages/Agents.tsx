@@ -18,6 +18,7 @@ import { useWorkflows } from '../services/workflow.service'
 import { useSkills } from '../services/skill.service'
 import { useAccessTokens, useCreateAccessToken, useDeleteAccessToken } from '../services/access-token.service'
 import { useConfirmDialog } from '../hooks/use-confirm-dialog'
+import { toast } from '../lib/toast'
 import type { CreateAgentDto } from '../types'
 
 const STEPS = [
@@ -194,9 +195,11 @@ export function Agents() {
     if (!formData.name || !formData.prompt) return
     try {
       await createAgentMutation.mutateAsync(formData)
+      toast.success('智能体创建成功')
       closeDialog()
     } catch (error) {
       console.error('Failed to create agent:', error)
+      toast.error(`创建智能体失败：${(error as Error).message}`)
     }
   }
 
@@ -204,9 +207,11 @@ export function Agents() {
     if (!editingAgentId || !formData.name || !formData.prompt) return
     try {
       await updateAgentMutation.mutateAsync({ id: editingAgentId, data: formData })
+      toast.success('智能体更新成功')
       closeDialog()
     } catch (error) {
       console.error('Failed to update agent:', error)
+      toast.error(`更新智能体失败：${(error as Error).message}`)
     }
   }
 
@@ -423,7 +428,7 @@ export function Agents() {
                 <Separator />
 
                 <div className="flex gap-2">
-                  <Link to={`/?agent=${agent.id}`} className="flex-1">
+                  <Link to={`/chat?agent=${agent.id}`} className="flex-1">
                     <Button className="w-full gap-1.5" size="sm" variant="default">
                       <MessageSquare className="h-3.5 w-3.5" />
                       对话测试

@@ -7,19 +7,24 @@ import App from './App.tsx'
 import { queryClient } from './lib/query-client'
 import { SidebarProvider } from './hooks/use-sidebar'
 import { AuthProvider } from './hooks/use-auth'
+import { ErrorBoundary } from './components/ErrorBoundary'
+import { Toaster } from './ui/components/toaster'
 import "@/ui/styles/globals.css"
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <QueryClientProvider client={queryClient}>
-      <BrowserRouter>
-        <AuthProvider>
-          <SidebarProvider>
-            <App />
-            <ReactQueryDevtools initialIsOpen={false} />
-          </SidebarProvider>
-        </AuthProvider>
-      </BrowserRouter>
-    </QueryClientProvider>
+    <ErrorBoundary>
+      <QueryClientProvider client={queryClient}>
+        <BrowserRouter>
+          <AuthProvider>
+            <SidebarProvider>
+              <App />
+              <Toaster />
+              <ReactQueryDevtools initialIsOpen={false} />
+            </SidebarProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </QueryClientProvider>
+    </ErrorBoundary>
   </React.StrictMode>,
 )

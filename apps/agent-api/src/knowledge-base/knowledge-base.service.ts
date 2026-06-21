@@ -395,8 +395,13 @@ export class KnowledgeBaseService {
     return await this.createIndex(vectorStore);
   }
 
-  async chat(knowledgeBaseId: string, message: string) {
+  async chat(knowledgeBaseId: string, message: string, userId?: string) {
     const startTime = Date.now();
+    // 通过 HTTP 端点调用时传入 userId，校验知识库归属，防止越权查询他人私有知识库；
+    // 工具内部调用（已通过 Agent-知识库关联鉴权）则不传 userId。
+    if (userId) {
+      await this.getKnowledgeBase(userId, knowledgeBaseId);
+    }
     this.logger.log(`[Query] Knowledge base: ${knowledgeBaseId}`);
     this.logger.log(`[Query] Question: ${message}`);
 

@@ -121,7 +121,7 @@ export class AgentService {
     await this.assignToolkitsToAgent(agent.id, createAgentDto);
 
     // 处理知识库分配
-    await this.assignKnowledgeBasesToAgent(agent.id, createAgentDto);
+    await this.assignKnowledgeBasesToAgent(agent.id, createAgentDto, userId);
 
     // 处理工作流分配
     await this.assignWorkflowsToAgent(agent.id, createAgentDto);
@@ -171,17 +171,18 @@ export class AgentService {
     }
   }
 
-  private async assignKnowledgeBasesToAgent(agentId: string, dto: CreateAgentDto | UpdateAgentDto) {
+  private async assignKnowledgeBasesToAgent(agentId: string, dto: CreateAgentDto | UpdateAgentDto, userId: string) {
     if (dto.knowledgeBases && dto.knowledgeBases.length > 0) {
+      // 仅允许关联当前用户拥有的知识库，防止越权挂载他人私有知识库
       const existingKbs = await this.prisma.knowledgeBase.findMany({
-        where: { id: { in: dto.knowledgeBases } },
+        where: { id: { in: dto.knowledgeBases }, createdById: userId },
         select: { id: true },
       });
       const existingIds = new Set(existingKbs.map(kb => kb.id));
 
       const validIds = dto.knowledgeBases.filter(kbId => {
         if (!existingIds.has(kbId)) {
-          this.logger.warn(`Knowledge base ${kbId} not found, skipping...`);
+          this.logger.warn(`Knowledge base ${kbId} not found or not owned by user, skipping...`);
           return false;
         }
         return true;
@@ -281,7 +282,7 @@ export class AgentService {
       await this.prisma.agentKnowledgeBase.deleteMany({
         where: { agentId: id },
       });
-      await this.assignKnowledgeBasesToAgent(id, updateAgentDto);
+      await this.assignKnowledgeBasesToAgent(id, updateAgentDto, userId);
     }
 
     // 如果提供了工作流配置，则更新工作流分配
@@ -408,11 +409,15 @@ export class AgentService {
     this.logger.log(`[Chat] Agent: ${agent.name} (${agentId})`);
     this.logger.log(`[Chat] User message: ${chatDto.message}`);
 
-    // 会话不存在则创建
+    // 会话不存在则创建；已存在则校验归属，防止写入/读取他人会话
     let session = await this.prisma.chatSession.findUnique({
       where: { id: sessionId },
     });
-    if (!session) {
+    if (session) {
+      if (session.userId !== userId) {
+        throw new ForbiddenException('无权访问此会话');
+      }
+    } else {
       session = await this.prisma.chatSession.create({
         data: {
           id: sessionId,
@@ -530,11 +535,15 @@ export class AgentService {
     this.logger.log(`[ChatStream] Agent: ${agent.name} (${agentId})`);
     this.logger.log(`[ChatStream] User message: ${chatDto.message}`);
 
-    // 会话不存在则创建
+    // 会话不存在则创建；已存在则校验归属，防止写入/读取他人会话
     let session = await this.prisma.chatSession.findUnique({
       where: { id: sessionId },
     });
-    if (!session) {
+    if (session) {
+      if (session.userId !== userId) {
+        throw new ForbiddenException('无权访问此会话');
+      }
+    } else {
       session = await this.prisma.chatSession.create({
         data: {
           id: sessionId,

@@ -10,6 +10,7 @@ interface AuthContextType {
   register: (username: string, password: string) => Promise<void>;
   logout: () => void;
   isAuthenticated: boolean;
+  isLoading: boolean;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -65,6 +66,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     return null;
   });
+  // session 校准完成前保持 loading，避免缓存用户与失效 cookie 导致的受保护页闪屏
+  const [isLoading, setIsLoading] = useState(true);
 
   // 启动时用 better-auth session 校准本地用户态
   useEffect(() => {
@@ -88,6 +91,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!isActive) return;
         setUser(null);
         localStorage.removeItem(USER_KEY);
+      })
+      .finally(() => {
+        if (isActive) setIsLoading(false);
       });
 
     return () => {
@@ -148,6 +154,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         register,
         logout,
         isAuthenticated: !!user,
+        isLoading,
       }}
     >
       {children}

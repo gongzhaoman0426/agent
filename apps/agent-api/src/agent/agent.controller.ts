@@ -80,18 +80,39 @@ export class AgentController {
     @CurrentUser() user: CurrentUserPayload,
   ) {
     res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Cache-Control', 'no-cache, no-transform');
     res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no'); // 禁用 nginx 等代理的响应缓冲
     res.flushHeaders();
+
+    // 检测客户端断开，及时中止后续生成，避免浪费 LLM 调用
+    let clientClosed = false;
+    res.on('close', () => {
+      clientClosed = true;
+    });
+
+    // 心跳：防止空闲连接被代理/网关断开
+    const heartbeat = setInterval(() => {
+      if (!res.writableEnded) {
+        res.write(': ping\n\n');
+      }
+    }, 15000);
 
     try {
       for await (const chunk of this.agentService.chatWithAgentStream(id, chatDto, user)) {
+        if (clientClosed) break;
         res.write(`event: ${chunk.event}\ndata: ${JSON.stringify(chunk.data)}\n\n`);
       }
     } catch (error) {
-      res.write(`event: error\ndata: ${JSON.stringify({ message: (error as Error).message })}\n\n`);
+      if (!res.writableEnded) {
+        res.write(`event: error\ndata: ${JSON.stringify({ message: (error as Error).message })}\n\n`);
+      }
+    } finally {
+      clearInterval(heartbeat);
+      if (!res.writableEnded) {
+        res.end();
+      }
     }
-    res.end();
   }
 
   @Get(':id/toolkits')
