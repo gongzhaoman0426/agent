@@ -1,5 +1,5 @@
 import { Link, useLocation } from 'react-router-dom'
-import { Plus, Bot, Wrench, GitBranch, BookOpen, LogOut } from 'lucide-react'
+import { Plus, Bot, Wrench, GitBranch, BookOpen, LogOut, Zap } from 'lucide-react'
 import { Button } from '@/ui/components/button'
 import { Separator } from '@/ui/components/separator'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/ui/components/tooltip'
@@ -12,6 +12,7 @@ const manageNav = [
   { name: '智能体', href: '/manage/agents', icon: Bot },
   { name: '工具包', href: '/manage/toolkits', icon: Wrench },
   { name: '工作流', href: '/manage/workflows', icon: GitBranch },
+  { name: '技能', href: '/manage/skills', icon: Zap },
   { name: '知识库', href: '/manage/knowledge-bases', icon: BookOpen },
 ]
 

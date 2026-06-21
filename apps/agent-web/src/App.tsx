@@ -5,6 +5,7 @@ import { Agents } from './pages/Agents'
 import { Toolkits } from './pages/Toolkits'
 import { Workflows } from './pages/Workflows'
 import { KnowledgeBases } from './pages/KnowledgeBases'
+import { Skills } from './pages/Skills'
 import { Login } from './pages/Login'
 import { useAuth } from './hooks/use-auth'
 import type { ReactNode } from 'react'
@@ -27,6 +28,7 @@ function App() {
         <Route path="/manage/agents" element={<Agents />} />
         <Route path="/manage/toolkits" element={<Toolkits />} />
         <Route path="/manage/workflows" element={<Workflows />} />
+        <Route path="/manage/skills" element={<Skills />} />
         <Route path="/manage/knowledge-bases" element={<KnowledgeBases />} />
       </Route>
     </Routes>

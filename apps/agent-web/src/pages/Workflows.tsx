@@ -189,7 +189,7 @@ export function Workflows() {
             </div>
             <h3 className="text-lg font-semibold mb-1">暂无工作流</h3>
             <p className="text-sm text-muted-foreground text-center max-w-md">
-              在后端添加继承 BaseWorkflow 的 DSL 定义后，服务启动时会同步到这里。
+              还没有可用的工作流
             </p>
           </CardContent>
         </Card>
