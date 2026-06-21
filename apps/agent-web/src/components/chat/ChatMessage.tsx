@@ -9,6 +9,9 @@ interface ChatMessageProps {
 
 export function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === 'user'
+  const orderedParts = message.parts?.filter((part) =>
+    part.type === 'tool_call' || part.content.length > 0,
+  )
 
   return (
     <div
@@ -41,12 +44,28 @@ export function ChatMessage({ message }: ChatMessageProps) {
             </div>
           ) : (
             <>
-              {message.toolCalls && message.toolCalls.length > 0 && (
-                <ToolCallIndicator toolCalls={message.toolCalls} />
+              {orderedParts && orderedParts.length > 0 ? (
+                <div className="space-y-2">
+                  {orderedParts.map((part) => (
+                    part.type === 'tool_call' ? (
+                      <ToolCallIndicator key={part.id} toolCalls={[part.toolCall]} />
+                    ) : (
+                      <div key={part.id} className="bg-transparent px-0 py-0 text-left whitespace-pre-wrap break-words">
+                        {part.content}
+                      </div>
+                    )
+                  ))}
+                </div>
+              ) : (
+                <>
+                  {message.toolCalls && message.toolCalls.length > 0 && (
+                    <ToolCallIndicator toolCalls={message.toolCalls} />
+                  )}
+                  <div className="bg-transparent px-0 py-0 text-left whitespace-pre-wrap break-words">
+                    {message.content}
+                  </div>
+                </>
               )}
-              <div className="bg-transparent px-0 py-0 text-left whitespace-pre-wrap break-words">
-                {message.content}
-              </div>
             </>
           )}
         </div>

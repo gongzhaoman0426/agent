@@ -9,7 +9,7 @@ import { generateUUID } from '../../lib/uuid'
 import { ChatHeader } from './ChatHeader'
 import { ChatMessages } from './ChatMessages'
 import { ChatInput } from './ChatInput'
-import type { ChatMessage, ChatSessionSummary, ToolCallInfo } from '../../types'
+import type { ChatMessage, ChatMessagePart, ChatSessionSummary, ToolCallInfo } from '../../types'
 
 const LAST_AGENT_KEY = 'last-agent-id'
 
@@ -123,6 +123,24 @@ export function ChatPage() {
       abortControllerRef.current = abortController
 
       try {
+        const appendTextPart = (parts: ChatMessagePart[] | undefined, delta: string): ChatMessagePart[] => {
+          const nextParts = [...(parts || [])]
+          const lastPart = nextParts[nextParts.length - 1]
+          if (lastPart?.type === 'text') {
+            nextParts[nextParts.length - 1] = {
+              ...lastPart,
+              content: lastPart.content + delta,
+            }
+          } else {
+            nextParts.push({
+              id: generateUUID(),
+              type: 'text',
+              content: delta,
+            })
+          }
+          return nextParts
+        }
+
         const ensureAssistantMessage = () => {
           if (!assistantCreated) {
             assistantCreated = true
@@ -133,6 +151,7 @@ export function ChatPage() {
               sessionId: activeSessionId!,
               createdAt: new Date().toISOString(),
               toolCalls: [],
+              parts: [],
             }
             queryClient.setQueryData(sessionQueryKey, (old: any) => {
               if (!old) return old
@@ -157,7 +176,11 @@ export function ChatPage() {
                 if (!old) return old
                 const msgs = old.messages.map((m: ChatMessage) =>
                   m.id === assistantMsgId
-                    ? { ...m, content: m.content + delta }
+                    ? {
+                        ...m,
+                        content: m.content + delta,
+                        parts: appendTextPart(m.parts, delta),
+                      }
                     : m
                 )
                 return { ...old, messages: msgs }
@@ -175,13 +198,25 @@ export function ChatPage() {
                 if (!old) return old
                 const msgs = old.messages.map((m: ChatMessage) =>
                   m.id === assistantMsgId
-                    ? { ...m, toolCalls: [...(m.toolCalls || []), toolCall] }
+                    ? {
+                        ...m,
+                        toolCalls: [...(m.toolCalls || []), toolCall],
+                        parts: [
+                          ...(m.parts || []),
+                          {
+                            id: data.toolId || generateUUID(),
+                            type: 'tool_call' as const,
+                            toolCall,
+                          },
+                        ],
+                      }
                     : m
                 )
                 return { ...old, messages: msgs }
               })
             },
             onToolResult: (data) => {
+              ensureAssistantMessage()
               queryClient.setQueryData(sessionQueryKey, (old: any) => {
                 if (!old) return old
                 const msgs = old.messages.map((m: ChatMessage) =>
@@ -192,6 +227,18 @@ export function ChatPage() {
                           tc.toolId === data.toolId
                             ? { ...tc, result: data.result, status: 'done' as const }
                             : tc
+                        ),
+                        parts: (m.parts || []).map((part: ChatMessagePart) =>
+                          part.type === 'tool_call' && part.toolCall.toolId === data.toolId
+                            ? {
+                                ...part,
+                                toolCall: {
+                                  ...part.toolCall,
+                                  result: data.result,
+                                  status: 'done' as const,
+                                },
+                              }
+                            : part
                         ),
                       }
                     : m

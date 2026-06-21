@@ -128,6 +128,18 @@ export interface ToolCallInfo {
   status: 'calling' | 'done' | 'error';
 }
 
+export type ChatMessagePart =
+  | {
+      id: string;
+      type: 'text';
+      content: string;
+    }
+  | {
+      id: string;
+      type: 'tool_call';
+      toolCall: ToolCallInfo;
+    };
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -135,6 +147,7 @@ export interface ChatMessage {
   sessionId: string;
   createdAt: string;
   toolCalls?: ToolCallInfo[];
+  parts?: ChatMessagePart[];
 }
 
 export interface ToolkitConfigDto {
