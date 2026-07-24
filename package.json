@@ -1,0 +1,17 @@
+{
+  "name": "agent-next",
+  "version": "0.1.0",
+  "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
+  "scripts": {
+    "dev:api": "pnpm --filter @agent-next/api dev",
+    "dev:web": "pnpm --filter @agent-next/web dev",
+    "build": "pnpm -r build",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @agent-next/api db:generate",
+    "db:push": "pnpm --filter @agent-next/api db:push",
+    "db:migrate": "pnpm --filter @agent-next/api db:migrate"
+  }
+}

@@ -1,0 +1,194 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============ better-auth ============
+
+model User {
+  id                  String                @id @default(cuid())
+  email               String                @unique
+  emailVerified       Boolean               @default(false)
+  name                String
+  image               String?
+  username            String                @unique
+  displayUsername     String?
+  accounts            Account[]
+  sessions            Session[]
+  userToolkitSettings UserToolkitSettings[]
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  @@map("users")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verifications")
+}
+
+// ============ Agent ============
+
+model Agent {
+  id             String          @id @default(cuid())
+  name           String
+  description    String?
+  prompt         String
+  model          String?
+  createdById    String?
+  deleted        Boolean         @default(false)
+  agentToolkits  AgentToolkit[]
+  agentWorkflows AgentWorkflow[]
+  agentSkills    AgentSkill[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@index([createdById, deleted])
+  @@map("agents")
+}
+
+// ============ Toolkit 注册表（代码发现同步） ============
+
+model Toolkit {
+  id                  String                @id
+  name                String
+  description         String
+  settingsSchema      Json?
+  deleted             Boolean               @default(false)
+  tools               Tool[]
+  agentToolkits       AgentToolkit[]
+  userToolkitSettings UserToolkitSettings[]
+  createdAt           DateTime              @default(now())
+  updatedAt           DateTime              @updatedAt
+
+  @@map("toolkits")
+}
+
+model Tool {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  description String
+  inputSchema Json?
+  toolkitId   String
+  toolkit     Toolkit  @relation(fields: [toolkitId], references: [id], onDelete: Cascade)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("tools")
+}
+
+// ============ Workflow 注册表（代码发现同步，仅元数据） ============
+
+model Workflow {
+  id             String          @id
+  name           String
+  description    String
+  inputSchema    Json?
+  deleted        Boolean         @default(false)
+  agentWorkflows AgentWorkflow[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  @@map("workflows")
+}
+
+// ============ 挂载关系 ============
+
+model AgentToolkit {
+  id        String   @id @default(cuid())
+  agentId   String
+  toolkitId String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  toolkit   Toolkit  @relation(fields: [toolkitId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([agentId, toolkitId])
+  @@map("agent_toolkits")
+}
+
+model AgentWorkflow {
+  id         String   @id @default(cuid())
+  agentId    String
+  workflowId String
+  agent      Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  workflow   Workflow @relation(fields: [workflowId], references: [id], onDelete: Cascade)
+  createdAt  DateTime @default(now())
+
+  @@unique([agentId, workflowId])
+  @@map("agent_workflows")
+}
+
+// Skill 是文件（skills/<name>/SKILL.md），挂载关系按 skill name 引用
+model AgentSkill {
+  id        String   @id @default(cuid())
+  agentId   String
+  skillName String
+  agent     Agent    @relation(fields: [agentId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([agentId, skillName])
+  @@map("agent_skills")
+}
+
+// ============ 用户级工具配置 ============
+
+model UserToolkitSettings {
+  id        String   @id @default(cuid())
+  userId    String
+  toolkitId String
+  settings  Json
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  toolkit   Toolkit  @relation(fields: [toolkitId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([userId, toolkitId])
+  @@map("user_toolkit_settings")
+}
