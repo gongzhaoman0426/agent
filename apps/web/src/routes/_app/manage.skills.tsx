@@ -1,21 +1,22 @@
 import { useRef, useState, type DragEvent } from 'react';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import {
   FileArchive,
-  FileCode2,
-  FileText,
+  PencilLine,
+  Plus,
   Sparkles,
   Trash2,
   Upload,
 } from 'lucide-react';
 import {
+  useCreateSkill,
   useDeleteSkill,
-  useSkillDetail,
   useSkills,
   useUploadSkill,
 } from '@/services/queries';
 import { Button } from '@/ui/button';
 import { Dialog } from '@/ui/dialog';
+import { Input } from '@/ui/input';
 import { cn } from '@/lib/utils';
 import {
   CardGrid,
@@ -28,12 +29,103 @@ export const Route = createFileRoute('/_app/manage/skills')({
   component: SkillsPage,
 });
 
-function UploadDialog({
+function CreateSkillDialog({
   open,
   onOpenChange,
+  onCreated,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onCreated: (name: string) => void;
+}) {
+  const createSkill = useCreateSkill();
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [error, setError] = useState('');
+
+  const submit = async () => {
+    setError('');
+    try {
+      const created = await createSkill.mutateAsync({
+        name: name.trim(),
+        description: description.trim(),
+      });
+      onOpenChange(false);
+      setName('');
+      setDescription('');
+      onCreated(created.name);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '创建失败');
+    }
+  };
+
+  const canSubmit =
+    name.trim() && description.trim() && !createSkill.isPending;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange} title="新建技能">
+      <div className="space-y-4">
+        <div>
+          <label className="mb-1.5 block text-[13px] font-medium">
+            技能名称
+          </label>
+          <Input
+            autoFocus
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="translate-doc"
+            className="font-mono text-xs"
+          />
+          <p className="mt-1.5 text-xs text-faint">
+            字母、数字、中划线、下划线，创建后不可修改
+          </p>
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-[13px] font-medium">
+            技能简介
+          </label>
+          <textarea
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            rows={3}
+            placeholder="一句话说明这个技能做什么，智能体据此判断何时激活它"
+            className="w-full resize-none rounded-xl border border-border bg-card px-3 py-2 text-sm placeholder:text-faint focus:border-primary/40 focus:outline-none"
+          />
+        </div>
+
+        {error && (
+          <p className="rounded-lg bg-destructive-soft px-3 py-2 text-[13px] text-destructive">
+            {error}
+          </p>
+        )}
+
+        <div className="rounded-xl bg-muted/70 p-3 text-xs leading-relaxed text-muted-foreground">
+          创建后会生成一份 SKILL.md 骨架，进入编辑页可以手动改，也可以让 AI
+          助手帮你补全内容和脚本。
+        </div>
+
+        <div className="flex justify-end gap-2">
+          <Button variant="outline" onClick={() => onOpenChange(false)}>
+            取消
+          </Button>
+          <Button onClick={() => void submit()} disabled={!canSubmit}>
+            {createSkill.isPending ? '创建中...' : '创建并编辑'}
+          </Button>
+        </div>
+      </div>
+    </Dialog>
+  );
+}
+
+function UploadDialog({
+  open,
+  onOpenChange,
+  onUploaded,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onUploaded: (name: string) => void;
 }) {
   const uploadSkill = useUploadSkill();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -47,8 +139,9 @@ function UploadDialog({
       return;
     }
     try {
-      await uploadSkill.mutateAsync(file);
+      const uploaded = await uploadSkill.mutateAsync(file);
       onOpenChange(false);
+      onUploaded(uploaded.name);
     } catch (err) {
       setError(err instanceof Error ? err.message : '上传失败');
     }
@@ -121,90 +214,31 @@ function UploadDialog({
   );
 }
 
-function SkillDetailDialog({
-  name,
-  onClose,
-}: {
-  name: string;
-  onClose: () => void;
-}) {
-  const { data: skill } = useSkillDetail(name);
-
-  return (
-    <Dialog
-      open
-      onOpenChange={(open) => !open && onClose()}
-      title={`技能 · ${name}`}
-      className="max-w-2xl"
-    >
-      {skill ? (
-        <div className="space-y-4">
-          <p className="text-[13px] text-muted-foreground">
-            {skill.description}
-          </p>
-          <div>
-            <p className="mb-1.5 text-[13px] font-medium">
-              指令内容（SKILL.md）
-            </p>
-            <pre className="max-h-80 overflow-y-auto whitespace-pre-wrap rounded-xl bg-muted p-4 font-mono text-xs leading-relaxed">
-              {skill.content}
-            </pre>
-          </div>
-          {skill.scripts.length > 0 && (
-            <div>
-              <p className="mb-1.5 text-[13px] font-medium">脚本</p>
-              <div className="flex flex-wrap gap-1.5">
-                {skill.scripts.map((script) => (
-                  <span
-                    key={script}
-                    className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 font-mono text-xs"
-                  >
-                    <FileCode2 className="h-3 w-3 text-faint" />
-                    {script}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-          {skill.references.length > 0 && (
-            <div>
-              <p className="mb-1.5 text-[13px] font-medium">引用资料</p>
-              <div className="flex flex-wrap gap-1.5">
-                {skill.references.map((file) => (
-                  <span
-                    key={file}
-                    className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 font-mono text-xs"
-                  >
-                    <FileText className="h-3 w-3 text-faint" />
-                    {file}
-                  </span>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      ) : (
-        <p className="text-sm text-muted-foreground">加载中...</p>
-      )}
-    </Dialog>
-  );
-}
-
 function SkillsPage() {
   const { data: skills, isLoading } = useSkills();
   const deleteSkill = useDeleteSkill();
+  const navigate = useNavigate();
   const [uploadOpen, setUploadOpen] = useState(false);
-  const [viewing, setViewing] = useState<string | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+
+  const openEditor = (name: string) =>
+    void navigate({ to: '/skills/$skillName', params: { skillName: name } });
 
   return (
     <PageShell
       title="技能"
-      subtitle="上传技能压缩包（SKILL.md + 脚本 + 参考资料），挂载给智能体按需激活"
+      subtitle="在线新建或上传技能包（SKILL.md + 脚本 + 参考资料），挂载给智能体按需激活"
       actions={
-        <Button onClick={() => setUploadOpen(true)}>
-          <Upload className="h-4 w-4" />
-          上传技能
-        </Button>
+        <>
+          <Button variant="outline" onClick={() => setUploadOpen(true)}>
+            <Upload className="h-4 w-4" />
+            上传 zip
+          </Button>
+          <Button onClick={() => setCreateOpen(true)}>
+            <Plus className="h-4 w-4" />
+            新建技能
+          </Button>
+        </>
       }
     >
       {isLoading && <p className="text-sm text-muted-foreground">加载中...</p>}
@@ -213,18 +247,28 @@ function SkillsPage() {
         <EmptyState
           icon={<Sparkles className="h-6 w-6" />}
           title="还没有技能"
-          description="把 SKILL.md 和脚本打包成 zip 上传，即可在智能体中挂载使用"
+          description="直接在线新建，或把 SKILL.md 和脚本打包成 zip 上传，即可挂载给智能体使用"
           action={
-            <Button onClick={() => setUploadOpen(true)}>
-              <Upload className="h-4 w-4" />
-              上传技能
-            </Button>
+            <>
+              <Button variant="outline" onClick={() => setUploadOpen(true)}>
+                <Upload className="h-4 w-4" />
+                上传 zip
+              </Button>
+              <Button onClick={() => setCreateOpen(true)}>
+                <Plus className="h-4 w-4" />
+                新建技能
+              </Button>
+            </>
           }
         />
       ) : (
         <CardGrid>
           {(skills ?? []).map((skill) => (
-            <div key={skill.id} className="entity-card flex flex-col p-5">
+            <div
+              key={skill.id}
+              onClick={() => openEditor(skill.name)}
+              className="entity-card flex cursor-pointer flex-col p-5"
+            >
               <div className="flex items-start gap-3">
                 <EntityAvatar
                   seed={skill.name}
@@ -252,15 +296,18 @@ function SkillsPage() {
                 {skill.description}
               </p>
 
-              <div className="mt-4 flex items-center gap-1.5 border-t border-border pt-3">
+              <div
+                className="mt-4 flex items-center gap-1.5 border-t border-border pt-3"
+                onClick={(e) => e.stopPropagation()}
+              >
                 <Button
                   size="sm"
                   variant="soft"
                   className="flex-1"
-                  onClick={() => setViewing(skill.name)}
+                  onClick={() => openEditor(skill.name)}
                 >
-                  <FileText className="h-3.5 w-3.5" />
-                  查看详情
+                  <PencilLine className="h-3.5 w-3.5" />
+                  编辑技能
                 </Button>
                 <Button
                   size="iconSm"
@@ -285,10 +332,16 @@ function SkillsPage() {
         </CardGrid>
       )}
 
-      <UploadDialog open={uploadOpen} onOpenChange={setUploadOpen} />
-      {viewing && (
-        <SkillDetailDialog name={viewing} onClose={() => setViewing(null)} />
-      )}
+      <UploadDialog
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
+        onUploaded={openEditor}
+      />
+      <CreateSkillDialog
+        open={createOpen}
+        onOpenChange={setCreateOpen}
+        onCreated={openEditor}
+      />
     </PageShell>
   );
 }

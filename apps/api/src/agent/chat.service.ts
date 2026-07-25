@@ -6,6 +6,12 @@ import {
 } from '@nestjs/common';
 import { RequestContext } from '@mastra/core/request-context';
 import type { Agent, AgentSkill, AgentToolkit, AgentWorkflow } from '@prisma/client';
+import {
+  toUiMessage,
+  type RecalledMessage,
+  type UiMessage,
+} from '../common/memory-message.js';
+import { mapStreamChunk, type SseChunk } from '../common/sse.js';
 import { MastraService } from '../mastra/mastra.service.js';
 import { ToolkitService } from '../toolkit/toolkit.service.js';
 import { REQUEST_CONTEXT_KEYS } from '../toolkit/toolkit.types.js';
@@ -18,12 +24,6 @@ type AgentWithMounts = Agent & {
   agentSkills: AgentSkill[];
 };
 
-export interface SseChunk {
-  event: 'delta' | 'tool_call' | 'tool_result' | 'done' | 'title' | 'error';
-  data: Record<string, unknown>;
-}
-
-const TOOL_RESULT_MAX_LENGTH = 1000;
 const TITLE_WAIT_TIMEOUT_MS = 20_000;
 const TITLE_POLL_INTERVAL_MS = 600;
 
@@ -63,7 +63,7 @@ export class ChatService {
 
     let responseText = '';
     for await (const chunk of stream.fullStream) {
-      const mapped = this.mapChunk(chunk as unknown as StreamChunk);
+      const mapped = mapStreamChunk(chunk, this.logger);
       if (mapped) {
         if (mapped.event === 'delta') {
           responseText += String(mapped.data.delta ?? '');
@@ -145,7 +145,7 @@ export class ChatService {
     });
 
     const messages = (recalled?.messages ?? [])
-      .map((message) => this.toUiMessage(message as RecalledMessage))
+      .map((message) => toUiMessage(message as RecalledMessage))
       .filter((message): message is UiMessage => message !== null);
 
     return {
@@ -218,51 +218,6 @@ export class ChatService {
     return requestContext;
   }
 
-  private mapChunk(chunk: StreamChunk): SseChunk | null {
-    const payload = (chunk.payload ?? {}) as Record<string, unknown>;
-
-    switch (chunk.type) {
-      case 'text-delta': {
-        const delta = String(payload.text ?? payload.textDelta ?? '');
-        return delta ? { event: 'delta', data: { delta } } : null;
-      }
-      case 'tool-call':
-        return {
-          event: 'tool_call',
-          data: {
-            toolId: String(payload.toolCallId ?? ''),
-            toolName: String(payload.toolName ?? ''),
-            toolKwargs: payload.args ?? payload.input ?? {},
-          },
-        };
-      case 'tool-result': {
-        let result = payload.result ?? payload.output;
-        const serialized =
-          typeof result === 'string' ? result : JSON.stringify(result ?? null);
-        if (serialized.length > TOOL_RESULT_MAX_LENGTH) {
-          result = `${serialized.slice(0, TOOL_RESULT_MAX_LENGTH)}...[已截断]`;
-        }
-        return {
-          event: 'tool_result',
-          data: {
-            toolId: String(payload.toolCallId ?? ''),
-            toolName: String(payload.toolName ?? ''),
-            result,
-          },
-        };
-      }
-      case 'error': {
-        this.logger.error(`流式对话错误: ${JSON.stringify(payload)}`);
-        return {
-          event: 'error',
-          data: { message: String(payload.error ?? payload.message ?? '未知错误') },
-        };
-      }
-      default:
-        return null;
-    }
-  }
-
   private async getThreadTitle(threadId: string): Promise<string | null> {
     const thread = await this.mastraService.memory
       .getThreadById({ threadId })
@@ -303,56 +258,6 @@ export class ChatService {
     };
   }
 
-  private toUiMessage(message: RecalledMessage): UiMessage | null {
-    if (message.role !== 'user' && message.role !== 'assistant') {
-      return null;
-    }
-
-    let content = '';
-    if (typeof message.content === 'string') {
-      content = message.content;
-    } else if (Array.isArray(message.content)) {
-      content = message.content
-        .map((part) =>
-          typeof part === 'object' && part !== null && 'text' in part
-            ? String((part as { text: unknown }).text ?? '')
-            : '',
-        )
-        .join('');
-    } else if (
-      typeof message.content === 'object' &&
-      message.content !== null
-    ) {
-      const record = message.content as Record<string, unknown>;
-      if (Array.isArray(record.parts)) {
-        content = record.parts
-          .map((part) =>
-            typeof part === 'object' && part !== null && 'text' in part
-              ? String((part as { text: unknown }).text ?? '')
-              : '',
-          )
-          .join('');
-      } else if (typeof record.content === 'string') {
-        content = record.content;
-      }
-    }
-
-    if (!content) {
-      return null;
-    }
-
-    return {
-      id: String(message.id ?? ''),
-      role: message.role,
-      content,
-      createdAt: message.createdAt,
-    };
-  }
-}
-
-interface StreamChunk {
-  type: string;
-  payload?: unknown;
 }
 
 interface ThreadLike {
@@ -361,18 +266,4 @@ interface ThreadLike {
   metadata?: Record<string, unknown> | null;
   createdAt?: Date | string;
   updatedAt?: Date | string;
-}
-
-interface RecalledMessage {
-  id?: string;
-  role: string;
-  content: unknown;
-  createdAt?: Date | string;
-}
-
-interface UiMessage {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  createdAt?: Date | string;
 }

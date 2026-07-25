@@ -11,6 +11,7 @@ import {
   Trash2,
 } from 'lucide-react';
 import { streamChat } from '@/lib/api';
+import { isSubmitEnter } from '@/lib/keyboard';
 import { cn, generateUUID } from '@/lib/utils';
 import {
   queryKeys,
@@ -418,7 +419,7 @@ function ChatPage() {
                 disabled={!agentId}
                 onChange={(e) => setInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
+                  if (isSubmitEnter(e)) {
                     e.preventDefault();
                     void handleSend();
                   }

@@ -9,6 +9,8 @@ import type {
   ChatSession,
   SessionDetail,
   SkillDetail,
+  SkillFileContent,
+  SkillFileNode,
   SkillSummary,
   Toolkit,
   Workflow,
@@ -22,6 +24,10 @@ export const queryKeys = {
   sessions: ['sessions'] as const,
   session: (id: string) => ['sessions', id] as const,
   toolkitSettings: (id: string) => ['toolkits', id, 'settings'] as const,
+  skillFiles: (name: string) => ['skills', name, 'files'] as const,
+  skillFile: (name: string, path: string) =>
+    ['skills', name, 'file', path] as const,
+  skillAssistant: (name: string) => ['skills', name, 'assistant'] as const,
 };
 
 // ---- Agents ----
@@ -155,6 +161,16 @@ export function useSkillDetail(name: string | null) {
   });
 }
 
+export function useCreateSkill() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string; description: string }) =>
+      api.post<SkillSummary>('/skills', data),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.skills, exact: true }),
+  });
+}
+
 export function useUploadSkill() {
   const queryClient = useQueryClient();
   return useMutation({
@@ -168,12 +184,113 @@ export function useUploadSkill() {
   });
 }
 
+/** 改名会同步目录、SKILL.md frontmatter 与智能体挂载 */
+export function useRenameSkill() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      name,
+      updates,
+    }: {
+      name: string;
+      updates: { name?: string; description?: string };
+    }) => api.patch<SkillSummary>(`/skills/${name}`, updates),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.skills,
+        exact: true,
+      });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.agents });
+    },
+  });
+}
+
 export function useDeleteSkill() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: (name: string) => api.delete(`/skills/${name}`),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.skills }),
+  });
+}
+
+// ---- Skill 文件编辑 ----
+
+export function useSkillFiles(name: string) {
+  return useQuery({
+    queryKey: queryKeys.skillFiles(name),
+    queryFn: () => api.get<SkillFileNode[]>(`/skills/${name}/files`),
+    enabled: Boolean(name),
+  });
+}
+
+export function useSkillFile(name: string, filePath: string | null) {
+  return useQuery({
+    queryKey: queryKeys.skillFile(name, filePath ?? ''),
+    queryFn: () =>
+      api.get<SkillFileContent>(
+        `/skills/${name}/file?path=${encodeURIComponent(filePath ?? '')}`,
+      ),
+    enabled: Boolean(name && filePath),
+  });
+}
+
+export function useSaveSkillFile(name: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { path: string; content: string }) =>
+      api.put<SkillFileContent>(`/skills/${name}/file`, data),
+    onSuccess: (saved) => {
+      queryClient.setQueryData(queryKeys.skillFile(name, saved.path), saved);
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.skillFiles(name),
+      });
+      // exact：技能列表与助手历史同属 ['skills'] 前缀，避免误伤对话历史
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.skills,
+        exact: true,
+      });
+    },
+  });
+}
+
+export function useDeleteSkillFile(name: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (filePath: string) =>
+      api.delete(`/skills/${name}/file?path=${encodeURIComponent(filePath)}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.skillFiles(name),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.skills,
+        exact: true,
+      });
+    },
+  });
+}
+
+// ---- Skill 编辑助手 ----
+
+export function useSkillAssistantHistory(name: string) {
+  return useQuery({
+    queryKey: queryKeys.skillAssistant(name),
+    queryFn: () =>
+      api.get<Array<{ id: string; role: 'user' | 'assistant'; content: string }>>(
+        `/skills/${name}/assistant/history`,
+      ),
+    enabled: Boolean(name),
+    staleTime: Infinity,
+  });
+}
+
+export function useResetSkillAssistant(name: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => api.delete(`/skills/${name}/assistant/history`),
+    onSuccess: () =>
+      queryClient.setQueryData(queryKeys.skillAssistant(name), []),
   });
 }
 

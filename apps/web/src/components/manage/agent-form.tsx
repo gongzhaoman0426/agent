@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { Dialog } from '@/ui/dialog';
 import { Button } from '@/ui/button';
+import { isSubmitEnter } from '@/lib/keyboard';
 import { Input, Textarea } from '@/ui/input';
 import { useCreateAgent } from '@/services/queries';
 
@@ -54,7 +55,7 @@ export function CreateAgentDialog({
             placeholder="如：日程助手"
             autoFocus
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && name.trim()) void handleSubmit();
+              if (isSubmitEnter(e) && name.trim()) void handleSubmit();
             }}
           />
         </div>

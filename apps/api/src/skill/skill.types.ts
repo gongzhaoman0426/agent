@@ -14,6 +14,21 @@ export interface SkillDetail extends SkillSummary {
   scripts: string[];
 }
 
+/** 技能目录中的一个文件（目录不单独建节点，由前端按路径分组） */
+export interface SkillFileNode {
+  /** 相对技能根目录的路径，如 `scripts/run.js` */
+  path: string;
+  size: number;
+  /** 是否为可在线编辑的纯文本 */
+  editable: boolean;
+  updatedAt: Date;
+}
+
+export interface SkillFileContent {
+  path: string;
+  content: string;
+}
+
 export interface ActivatedSkill {
   name: string;
   content: string;

@@ -11,13 +11,12 @@ import {
   Res,
 } from '@nestjs/common';
 import type { Response } from 'express';
+import { writeSseStream } from '../common/sse.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import type { CurrentUserPayload } from '../auth/auth.guard.js';
 import { AgentService } from './agent.service.js';
 import { ChatService } from './chat.service.js';
 import { chatSchema } from './agent.types.js';
-
-const HEARTBEAT_INTERVAL_MS = 15_000;
 
 @Controller('agents')
 export class AgentController {
@@ -123,47 +122,11 @@ export class AgentController {
     const dto = this.parseChatDto(body);
     const agent = await this.agentService.findOwned(id, user.userId);
 
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no');
-    res.flushHeaders();
-
-    let closed = false;
-    res.on('close', () => {
-      closed = true;
-    });
-
-    const heartbeat = setInterval(() => {
-      if (!closed) {
-        res.write(': ping\n\n');
-      }
-    }, HEARTBEAT_INTERVAL_MS);
-
-    try {
-      for await (const chunk of this.chatService.chatStream(
-        agent,
-        dto,
-        user.userId,
-      )) {
-        if (closed) break;
-        res.write(
-          `event: ${chunk.event}\ndata: ${JSON.stringify(chunk.data)}\n\n`,
-        );
-      }
-    } catch (error) {
-      this.logger.error(`流式对话异常: ${String(error)}`);
-      if (!closed) {
-        const message =
-          error instanceof Error ? error.message : '对话执行失败';
-        res.write(`event: error\ndata: ${JSON.stringify({ message })}\n\n`);
-      }
-    } finally {
-      clearInterval(heartbeat);
-      if (!closed) {
-        res.end();
-      }
-    }
+    await writeSseStream(
+      res,
+      this.chatService.chatStream(agent, dto, user.userId),
+      this.logger,
+    );
   }
 
   private parseChatDto(body: unknown) {

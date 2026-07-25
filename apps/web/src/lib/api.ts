@@ -73,6 +73,8 @@ export const api = {
     request<T>(path, { method: 'POST', body: JSON.stringify(body ?? {}) }),
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PUT', body: JSON.stringify(body ?? {}) }),
+  patch: <T>(path: string, body?: unknown) =>
+    request<T>(path, { method: 'PATCH', body: JSON.stringify(body ?? {}) }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
   upload: <T>(path: string, formData: FormData) =>
     requestUpload<T>(path, formData),
@@ -92,19 +94,53 @@ export interface StreamCallbacks {
     toolName: string;
     result?: unknown;
   }) => void;
-  onDone: (data: { response: string; sessionId: string }) => void;
+  onDone: (data: {
+    response: string;
+    sessionId: string;
+    /** 技能助手专用：本轮是否改动了文件 */
+    filesChanged?: boolean;
+  }) => void;
   /** 标题由后端异步生成，在 done 之后才会到达 */
   onTitle?: (data: { sessionId: string; title: string }) => void;
   onError: (message: string) => void;
 }
 
-export async function streamChat(
+export function streamChat(
   agentId: string,
   payload: { message: string; sessionId: string },
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
-  const response = await fetch(`${API_BASE}/agents/${agentId}/chat/stream`, {
+  return streamSse(
+    `/agents/${agentId}/chat/stream`,
+    payload,
+    callbacks,
+    signal,
+  );
+}
+
+/** 技能编辑助手：同一套事件协议，工具调用即为文件读写 */
+export function streamSkillAssistant(
+  skillName: string,
+  payload: { message: string },
+  callbacks: StreamCallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
+  return streamSse(
+    `/skills/${encodeURIComponent(skillName)}/assistant/stream`,
+    payload,
+    callbacks,
+    signal,
+  );
+}
+
+async function streamSse(
+  path: string,
+  payload: unknown,
+  callbacks: StreamCallbacks,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await fetch(`${API_BASE}${path}`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -158,6 +194,7 @@ export async function streamChat(
         callbacks.onDone({
           response: String(data.response ?? ''),
           sessionId: String(data.sessionId ?? ''),
+          filesChanged: Boolean(data.filesChanged),
         });
         break;
       case 'title':

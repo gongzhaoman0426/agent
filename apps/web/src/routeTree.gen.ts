@@ -18,6 +18,7 @@ import { Route as AppManageAgentsRouteImport } from './routes/_app/manage.agents
 import { Route as AppManageSkillsRouteImport } from './routes/_app/manage.skills'
 import { Route as AppManageToolkitsRouteImport } from './routes/_app/manage.toolkits'
 import { Route as AppManageWorkflowsRouteImport } from './routes/_app/manage.workflows'
+import { Route as AppSkillsSkillNameRouteImport } from './routes/_app/skills.$skillName'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -63,6 +64,11 @@ const AppManageWorkflowsRoute = AppManageWorkflowsRouteImport.update({
   path: '/manage/workflows',
   getParentRoute: () => AppRoute,
 } as any)
+const AppSkillsSkillNameRoute = AppSkillsSkillNameRouteImport.update({
+  id: '/skills/$skillName',
+  path: '/skills/$skillName',
+  getParentRoute: () => AppRoute,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -73,6 +79,7 @@ export interface FileRoutesByFullPath {
   '/manage/skills': typeof AppManageSkillsRoute
   '/manage/toolkits': typeof AppManageToolkitsRoute
   '/manage/workflows': typeof AppManageWorkflowsRoute
+  '/skills/$skillName': typeof AppSkillsSkillNameRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -83,6 +90,7 @@ export interface FileRoutesByTo {
   '/manage/skills': typeof AppManageSkillsRoute
   '/manage/toolkits': typeof AppManageToolkitsRoute
   '/manage/workflows': typeof AppManageWorkflowsRoute
+  '/skills/$skillName': typeof AppSkillsSkillNameRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -95,6 +103,7 @@ export interface FileRoutesById {
   '/_app/manage/skills': typeof AppManageSkillsRoute
   '/_app/manage/toolkits': typeof AppManageToolkitsRoute
   '/_app/manage/workflows': typeof AppManageWorkflowsRoute
+  '/_app/skills/$skillName': typeof AppSkillsSkillNameRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -107,6 +116,7 @@ export interface FileRouteTypes {
     | '/manage/skills'
     | '/manage/toolkits'
     | '/manage/workflows'
+    | '/skills/$skillName'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -117,6 +127,7 @@ export interface FileRouteTypes {
     | '/manage/skills'
     | '/manage/toolkits'
     | '/manage/workflows'
+    | '/skills/$skillName'
   id:
     | '__root__'
     | '/'
@@ -128,6 +139,7 @@ export interface FileRouteTypes {
     | '/_app/manage/skills'
     | '/_app/manage/toolkits'
     | '/_app/manage/workflows'
+    | '/_app/skills/$skillName'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -201,6 +213,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppManageWorkflowsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/skills/$skillName': {
+      id: '/_app/skills/$skillName'
+      path: '/skills/$skillName'
+      fullPath: '/skills/$skillName'
+      preLoaderRoute: typeof AppSkillsSkillNameRouteImport
+      parentRoute: typeof AppRoute
+    }
   }
 }
 
@@ -211,6 +230,7 @@ interface AppRouteChildren {
   AppManageSkillsRoute: typeof AppManageSkillsRoute
   AppManageToolkitsRoute: typeof AppManageToolkitsRoute
   AppManageWorkflowsRoute: typeof AppManageWorkflowsRoute
+  AppSkillsSkillNameRoute: typeof AppSkillsSkillNameRoute
 }
 
 const AppRouteChildren: AppRouteChildren = {
@@ -220,6 +240,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppManageSkillsRoute: AppManageSkillsRoute,
   AppManageToolkitsRoute: AppManageToolkitsRoute,
   AppManageWorkflowsRoute: AppManageWorkflowsRoute,
+  AppSkillsSkillNameRoute: AppSkillsSkillNameRoute,
 }
 
 const AppRouteWithChildren = AppRoute._addFileChildren(AppRouteChildren)

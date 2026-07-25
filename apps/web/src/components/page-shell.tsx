@@ -63,7 +63,11 @@ export function EmptyState({
           {description}
         </p>
       )}
-      {action && <div className="mt-4">{action}</div>}
+      {action && (
+        <div className="mt-4 flex items-center justify-center gap-2">
+          {action}
+        </div>
+      )}
     </div>
   );
 }

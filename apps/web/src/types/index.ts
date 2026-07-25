@@ -78,6 +78,19 @@ export interface SkillDetail extends SkillSummary {
   scripts: string[];
 }
 
+export interface SkillFileNode {
+  /** 相对技能根目录的路径，如 scripts/run.js */
+  path: string;
+  size: number;
+  editable: boolean;
+  updatedAt: string;
+}
+
+export interface SkillFileContent {
+  path: string;
+  content: string;
+}
+
 export interface ChatSession {
   id: string;
   title: string;

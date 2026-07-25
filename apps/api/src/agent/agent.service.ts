@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { collectWithAncestors } from './agent-ancestors.js';
 import { AgentRegistryService } from './agent-registry.service.js';
 import {
   createAgentSchema,
@@ -214,21 +215,8 @@ export class AgentService {
 
   /** 配置变更后，本体与所有（间接）挂载了它的父级实例缓存都要失效 */
   private async invalidateWithAncestors(agentId: string) {
-    const visited = new Set<string>([agentId]);
-    let frontier = [agentId];
-    while (frontier.length > 0) {
-      const edges = await this.prisma.agentSubAgent.findMany({
-        where: { childId: { in: frontier } },
-        select: { parentId: true },
-      });
-      frontier = edges
-        .map((edge) => edge.parentId)
-        .filter((id) => !visited.has(id));
-      for (const id of frontier) {
-        visited.add(id);
-      }
-    }
-    for (const id of visited) {
+    const affected = await collectWithAncestors(this.prisma, [agentId]);
+    for (const id of affected) {
       this.registry.invalidate(id);
     }
   }

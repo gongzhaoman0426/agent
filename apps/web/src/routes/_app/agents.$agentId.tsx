@@ -15,6 +15,7 @@ import {
   X,
 } from 'lucide-react';
 import { streamChat } from '@/lib/api';
+import { isSubmitEnter } from '@/lib/keyboard';
 import { cn, generateUUID } from '@/lib/utils';
 import {
   useAgent,
@@ -404,7 +405,7 @@ function DebugPanel({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
+              if (isSubmitEnter(e)) {
                 e.preventDefault();
                 void handleSend();
               }
