@@ -13,6 +13,8 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
  */
 type ModelRouterId = `${string}/${string}`;
 
+const DEFAULT_MODEL = 'openai/gpt-5.6-luna';
+
 /**
  * 部分 OpenAI 兼容代理（如 yunwu.ai）的流式响应不发送 finish_reason 就直接
  * [DONE]，AI SDK 会把 finishReason 判为 unknown，Mastra 视为失败并重试整轮
@@ -115,13 +117,26 @@ export class MastraService {
     }
 
     this.defaultModel =
-      configService.get<string>('MASTRA_DEFAULT_MODEL') || 'openai/gpt-5.5';
+      configService.get<string>('MASTRA_DEFAULT_MODEL') || DEFAULT_MODEL;
     this.openaiBaseUrl = configService.get<string>('OPENAI_BASE_URL');
     this.openaiApiKey = configService.get<string>('OPENAI_API_KEY');
 
     const embeddingModel =
       configService.get<string>('MASTRA_EMBEDDING_MODEL') ||
       'openai/text-embedding-3-small';
+
+    /**
+     * 语义召回要为「每次提问」和「每条落库消息」各调一次 embedding 接口。
+     * 走第三方代理时这项开销很大（实测 2~9s 且不稳定），因此做成开关：
+     * 关闭后仅保留 lastMessages 的近期上下文，响应明显更快。
+     */
+    const semanticRecall =
+      (configService.get<string>('MASTRA_SEMANTIC_RECALL') ?? 'false') ===
+      'true';
+
+    // 标题生成在收尾阶段异步进行，不阻塞回复，默认与主模型一致
+    const titleModel =
+      configService.get<string>('MASTRA_TITLE_MODEL') || DEFAULT_MODEL;
 
     this.memory = new Memory({
       // Mastra 自建表放独立 schema，避免与 Prisma 管理的 public 互相干扰
@@ -139,12 +154,14 @@ export class MastraService {
       options: {
         lastMessages: 10,
         // resource = `${userId}:${agentId}`，跨会话召回但不跨 Agent
-        semanticRecall: {
-          topK: 4,
-          messageRange: 2,
-          scope: 'resource',
+        semanticRecall: semanticRecall
+          ? { topK: 4, messageRange: 2, scope: 'resource' }
+          : false,
+        generateTitle: {
+          model: this.resolveModel(titleModel),
+          instructions:
+            '用不超过 12 个字概括这轮对话的主题作为标题，与用户提问同语种，只输出标题本身，不要引号和标点。',
         },
-        generateTitle: true,
       },
     });
   }

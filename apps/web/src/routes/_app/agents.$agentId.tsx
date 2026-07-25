@@ -324,7 +324,11 @@ function DebugPanel({
               toolCall: { ...data, done: false },
             }),
           onToolResult: (data) => markToolDone(data.toolId, data.result),
-          onDone: () => undefined,
+          onDone: () => {
+            // 后端仍在补发标题，但对话已完成，立刻解除输入锁定
+            setStreaming(false);
+            setThinking(false);
+          },
           onError: (errorMessage) =>
             appendAssistantPart({
               type: 'text',
@@ -341,9 +345,12 @@ function DebugPanel({
         });
       }
     } finally {
-      setStreaming(false);
-      setThinking(false);
-      abortRef.current = null;
+      // 标题事件会让流比对话本身晚结束，期间用户可能已发起新一轮
+      if (abortRef.current === controller) {
+        setStreaming(false);
+        setThinking(false);
+        abortRef.current = null;
+      }
     }
   };
 

@@ -92,11 +92,9 @@ export interface StreamCallbacks {
     toolName: string;
     result?: unknown;
   }) => void;
-  onDone: (data: {
-    response: string;
-    title?: string;
-    sessionId: string;
-  }) => void;
+  onDone: (data: { response: string; sessionId: string }) => void;
+  /** 标题由后端异步生成，在 done 之后才会到达 */
+  onTitle?: (data: { sessionId: string; title: string }) => void;
   onError: (message: string) => void;
 }
 
@@ -159,8 +157,13 @@ export async function streamChat(
       case 'done':
         callbacks.onDone({
           response: String(data.response ?? ''),
-          title: data.title ? String(data.title) : undefined,
           sessionId: String(data.sessionId ?? ''),
+        });
+        break;
+      case 'title':
+        callbacks.onTitle?.({
+          sessionId: String(data.sessionId ?? ''),
+          title: String(data.title ?? ''),
         });
         break;
       case 'error':

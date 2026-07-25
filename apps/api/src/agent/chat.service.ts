@@ -19,11 +19,13 @@ type AgentWithMounts = Agent & {
 };
 
 export interface SseChunk {
-  event: 'delta' | 'tool_call' | 'tool_result' | 'done' | 'error';
+  event: 'delta' | 'tool_call' | 'tool_result' | 'done' | 'title' | 'error';
   data: Record<string, unknown>;
 }
 
 const TOOL_RESULT_MAX_LENGTH = 1000;
+const TITLE_WAIT_TIMEOUT_MS = 20_000;
+const TITLE_POLL_INTERVAL_MS = 600;
 
 @Injectable()
 export class ChatService {
@@ -41,7 +43,7 @@ export class ChatService {
     dto: ChatDto,
     userId: string,
   ): AsyncGenerator<SseChunk> {
-    const { threadId, resourceId } = await this.ensureThread(
+    const { threadId, resourceId, hasTitle } = await this.ensureThread(
       dto.sessionId,
       userId,
       agent,
@@ -59,16 +61,22 @@ export class ChatService {
       requestContext,
     });
 
+    let responseText = '';
     for await (const chunk of stream.fullStream) {
       const mapped = this.mapChunk(chunk as unknown as StreamChunk);
       if (mapped) {
+        if (mapped.event === 'delta') {
+          responseText += String(mapped.data.delta ?? '');
+        }
         yield mapped;
       }
     }
 
-    const responseText = await stream.text;
-    const title = await this.getThreadTitle(threadId);
-
+    /*
+     * 内容流结束即宣告完成：Mastra 的收尾（消息落库、向量化、标题生成）在
+     * 内部异步进行，`await stream.text` 会一直等到它们全部完成（实测 10s+），
+     * 阻塞 done 只会让用户看完回复还不能继续输入。
+     */
     yield {
       event: 'done',
       data: {
@@ -76,9 +84,16 @@ export class ChatService {
         agentName: agent.name,
         sessionId: threadId,
         response: responseText,
-        ...(title ? { title } : {}),
       },
     };
+
+    // 新会话的标题是异步生成的，落库后补发一个事件让前端刷新会话列表
+    if (!hasTitle && responseText) {
+      const title = await this.waitForTitle(stream, threadId);
+      if (title) {
+        yield { event: 'title', data: { sessionId: threadId, title } };
+      }
+    }
   }
 
   /** 非流式对话（API 场景） */
@@ -162,7 +177,7 @@ export class ChatService {
       if (metadata.userId !== userId) {
         throw new ForbiddenException('无权访问该会话');
       }
-      return { threadId: sessionId, resourceId };
+      return { threadId: sessionId, resourceId, hasTitle: Boolean(existing.title) };
     }
 
     await this.mastraService.memory.createThread({
@@ -170,7 +185,7 @@ export class ChatService {
       resourceId,
       metadata: { userId, agentId: agent.id, agentName: agent.name },
     });
-    return { threadId: sessionId, resourceId };
+    return { threadId: sessionId, resourceId, hasTitle: false };
   }
 
   private async requireOwnedThread(sessionId: string, userId: string) {
@@ -253,6 +268,27 @@ export class ChatService {
       .getThreadById({ threadId })
       .catch(() => null);
     return thread?.title ?? null;
+  }
+
+  /**
+   * 标题由 Mastra 在收尾阶段异步生成，落库时间不确定，
+   * 这里轮询等待一小段时间；超时放弃（前端下次拉取会话列表自会拿到）。
+   */
+  private async waitForTitle(
+    stream: { text: Promise<string> },
+    threadId: string,
+  ): Promise<string | null> {
+    await stream.text.catch(() => undefined);
+
+    const deadline = Date.now() + TITLE_WAIT_TIMEOUT_MS;
+    while (Date.now() < deadline) {
+      const title = await this.getThreadTitle(threadId);
+      if (title) {
+        return title;
+      }
+      await new Promise((resolve) => setTimeout(resolve, TITLE_POLL_INTERVAL_MS));
+    }
+    return null;
   }
 
   private toSessionSummary(thread: ThreadLike) {
