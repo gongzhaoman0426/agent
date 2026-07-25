@@ -3,43 +3,44 @@ import type { RequestContext } from '@mastra/core/request-context';
 import { z } from 'zod';
 import { toolkitId } from '../toolkit.decorator.js';
 import {
-  REQUEST_CONTEXT_KEYS,
+  readToolkitSettings,
+  type SettingField,
   type ToolkitDefinition,
+  type ToolkitSettings,
 } from '../toolkit.types.js';
 
 const TOOLKIT_ID = 'home-assistant-toolkit';
+const TOOLKIT_NAME = 'Home Assistant';
 const REQUEST_TIMEOUT_MS = 10_000;
 const MAX_ENTITIES = 200;
 
-/** 用户级配置：实例地址 + 长效访问令牌 */
-const settingsSchema = z.object({
-  baseUrl: z
-    .url('实例地址需为合法 URL')
-    .describe('Home Assistant 实例地址，如 http://homeassistant.local:8123'),
-  token: z
-    .string()
-    .min(1, '令牌不能为空')
-    .describe('长效访问令牌（Home Assistant 用户资料页创建的 Long-Lived Access Token）'),
-});
+const settingsFields: SettingField[] = [
+  {
+    key: 'baseUrl',
+    label: '实例地址',
+    placeholder: 'http://homeassistant.local:8123',
+    description: 'Home Assistant 的访问地址，不含末尾斜杠',
+    required: true,
+  },
+  {
+    key: 'token',
+    label: '长效访问令牌',
+    placeholder: 'eyJhbGciOi...',
+    description: '在 Home Assistant 用户资料页创建的 Long-Lived Access Token',
+    required: true,
+    secret: true,
+  },
+];
 
-type HaSettings = z.infer<typeof settingsSchema>;
-
-/** 从 requestContext 取当前用户的 Home Assistant 配置，未配置时抛出可读错误 */
-function resolveSettings(requestContext: RequestContext): HaSettings {
-  const map = requestContext.get(REQUEST_CONTEXT_KEYS.toolkitSettings) as
-    | Record<string, unknown>
-    | undefined;
-  const result = settingsSchema.safeParse(map?.[TOOLKIT_ID]);
-  if (!result.success) {
-    throw new Error(
-      '尚未配置 Home Assistant：请在「插件工具」页为 Home Assistant 填写实例地址与访问令牌',
-    );
-  }
-  return result.data;
+function resolveSettings(requestContext: RequestContext): ToolkitSettings {
+  return readToolkitSettings(requestContext, TOOLKIT_ID, TOOLKIT_NAME, [
+    'baseUrl',
+    'token',
+  ]);
 }
 
 async function haRequest(
-  settings: HaSettings,
+  settings: ToolkitSettings,
   path: string,
   method: 'GET' | 'POST' = 'GET',
   body?: unknown,
@@ -177,9 +178,9 @@ const callHomeService = createTool({
  */
 @toolkitId(TOOLKIT_ID)
 export class HomeAssistantToolkit implements ToolkitDefinition {
-  readonly name = 'Home Assistant';
+  readonly name = TOOLKIT_NAME;
   readonly description =
     '连接 Home Assistant 智能家居中枢，查询设备状态并调用服务（如开关灯、调节温控）。需在插件配置中填写实例地址与长效访问令牌。';
-  readonly settingsSchema = settingsSchema;
+  readonly settingsFields = settingsFields;
   readonly tools = { listHomeEntities, getHomeEntityState, callHomeService };
 }

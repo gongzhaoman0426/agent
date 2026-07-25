@@ -95,7 +95,7 @@ export function useToolkitSettings(toolkitId: string, enabled: boolean) {
   return useQuery({
     queryKey: queryKeys.toolkitSettings(toolkitId),
     queryFn: () =>
-      api.get<Record<string, unknown>>(`/toolkits/${toolkitId}/settings`),
+      api.get<Record<string, string>>(`/toolkits/${toolkitId}/settings`),
     enabled,
   });
 }
@@ -108,7 +108,7 @@ export function useUpdateToolkitSettings() {
       settings,
     }: {
       toolkitId: string;
-      settings: Record<string, unknown>;
+      settings: Record<string, string>;
     }) => api.put(`/toolkits/${toolkitId}/settings`, settings),
     onSuccess: (_data, variables) =>
       queryClient.invalidateQueries({

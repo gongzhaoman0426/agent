@@ -50,8 +50,8 @@ export class ToolkitDiscoveryService implements OnModuleInit {
 
   private async syncToDatabase() {
     for (const [id, toolkit] of this.registry) {
-      const settingsSchema = toolkit.settingsSchema
-        ? this.toJsonSchema(toolkit.settingsSchema)
+      const settingsFields = toolkit.settingsFields?.length
+        ? (toolkit.settingsFields as unknown as Prisma.InputJsonValue)
         : undefined;
 
       await this.prisma.toolkit.upsert({
@@ -60,12 +60,12 @@ export class ToolkitDiscoveryService implements OnModuleInit {
           id,
           name: toolkit.name,
           description: toolkit.description,
-          settingsSchema: settingsSchema ?? undefined,
+          settingsFields: settingsFields ?? undefined,
         },
         update: {
           name: toolkit.name,
           description: toolkit.description,
-          settingsSchema: settingsSchema ?? Prisma.DbNull,
+          settingsFields: settingsFields ?? Prisma.DbNull,
           deleted: false,
         },
       });

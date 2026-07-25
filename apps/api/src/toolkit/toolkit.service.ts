@@ -7,6 +7,7 @@ import type { ToolsInput } from '@mastra/core/agent';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ToolkitDiscoveryService } from './toolkit-discovery.service.js';
+import type { ToolkitDefinition, ToolkitSettings } from './toolkit.types.js';
 
 @Injectable()
 export class ToolkitService {
@@ -51,24 +52,43 @@ export class ToolkitService {
       throw new NotFoundException(`Toolkit 不存在: ${toolkitId}`);
     }
 
-    if (toolkit.settingsSchema) {
-      const result = toolkit.settingsSchema.safeParse(settings);
-      if (!result.success) {
-        throw new BadRequestException(
-          `配置校验失败: ${result.error.issues.map((issue) => issue.message).join('; ')}`,
-        );
-      }
-    }
+    const normalized = this.normalizeSettings(toolkit, settings);
 
     return this.prisma.userToolkitSettings.upsert({
       where: { userId_toolkitId: { userId, toolkitId } },
-      create: {
-        userId,
-        toolkitId,
-        settings: settings as Prisma.InputJsonValue,
-      },
-      update: { settings: settings as Prisma.InputJsonValue },
+      create: { userId, toolkitId, settings: normalized },
+      update: { settings: normalized },
     });
+  }
+
+  /** 只保留声明过的字段、统一转成字符串，并校验必填项 */
+  private normalizeSettings(
+    toolkit: ToolkitDefinition,
+    settings: Record<string, unknown>,
+  ): Prisma.InputJsonValue {
+    const fields = toolkit.settingsFields ?? [];
+    if (fields.length === 0) {
+      return {};
+    }
+
+    const normalized: ToolkitSettings = {};
+    const missing: string[] = [];
+    for (const field of fields) {
+      const raw = settings[field.key];
+      const value = raw === undefined || raw === null ? '' : String(raw).trim();
+      if (field.required && !value) {
+        missing.push(field.label);
+        continue;
+      }
+      if (value) {
+        normalized[field.key] = value;
+      }
+    }
+
+    if (missing.length > 0) {
+      throw new BadRequestException(`请填写必填项: ${missing.join('、')}`);
+    }
+    return normalized;
   }
 
   /** 一次性取用户所有 toolkit 配置，对话时放进 requestContext */

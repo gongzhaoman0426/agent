@@ -38,11 +38,21 @@ export interface Tool {
   inputSchema?: Record<string, unknown> | null;
 }
 
+/** 工具包配置项，值统一为字符串 */
+export interface SettingField {
+  key: string;
+  label: string;
+  description?: string;
+  placeholder?: string;
+  required?: boolean;
+  secret?: boolean;
+}
+
 export interface Toolkit {
   id: string;
   name: string;
   description: string;
-  settingsSchema?: Record<string, unknown> | null;
+  settingsFields?: SettingField[] | null;
   tools: Tool[];
 }
 

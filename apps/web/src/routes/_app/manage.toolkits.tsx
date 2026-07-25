@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { Settings, Wrench } from 'lucide-react';
 import {
@@ -9,7 +9,7 @@ import {
 import type { Toolkit } from '@/types';
 import { Button } from '@/ui/button';
 import { Dialog } from '@/ui/dialog';
-import { Textarea } from '@/ui/input';
+import { Input } from '@/ui/input';
 import {
   CardGrid,
   EmptyState,
@@ -28,27 +28,34 @@ function SettingsDialog({
   toolkit: Toolkit;
   onClose: () => void;
 }) {
-  const { data: settings } = useToolkitSettings(toolkit.id, true);
+  const { data: settings, isLoading } = useToolkitSettings(toolkit.id, true);
   const updateSettings = useUpdateToolkitSettings();
-  const [text, setText] = useState<string | null>(null);
+  const fields = toolkit.settingsFields ?? [];
+  const [values, setValues] = useState<Record<string, string> | null>(null);
   const [error, setError] = useState('');
 
-  const value =
-    text ?? (settings ? JSON.stringify(settings, null, 2) : '{}');
+  // 配置拉回后填入表单，之后以用户编辑为准
+  useEffect(() => {
+    if (settings && !values) {
+      setValues(
+        Object.fromEntries(
+          fields.map((field) => [field.key, settings[field.key] ?? '']),
+        ),
+      );
+    }
+  }, [settings, values, fields]);
+
+  const form = values ?? {};
+  const missing = fields.filter(
+    (field) => field.required && !form[field.key]?.trim(),
+  );
 
   const handleSave = async () => {
     setError('');
-    let parsed: Record<string, unknown>;
-    try {
-      parsed = JSON.parse(value) as Record<string, unknown>;
-    } catch {
-      setError('JSON 格式错误');
-      return;
-    }
     try {
       await updateSettings.mutateAsync({
         toolkitId: toolkit.id,
-        settings: parsed,
+        settings: form,
       });
       onClose();
     } catch (err) {
@@ -62,41 +69,54 @@ function SettingsDialog({
       onOpenChange={(open) => !open && onClose()}
       title={`${toolkit.name} · 配置`}
     >
-      <div className="space-y-4">
-        {toolkit.settingsSchema && (
-          <div>
-            <p className="mb-1.5 text-[13px] font-medium">配置 Schema</p>
-            <pre className="max-h-32 overflow-y-auto rounded-xl bg-muted p-3 font-mono text-xs">
-              {JSON.stringify(toolkit.settingsSchema, null, 2)}
-            </pre>
+      {isLoading || !values ? (
+        <p className="py-6 text-center text-sm text-muted-foreground">
+          加载中...
+        </p>
+      ) : (
+        <div className="space-y-4">
+          {fields.map((field) => (
+            <div key={field.key}>
+              <label className="mb-1.5 block text-[13px] font-medium">
+                {field.label}
+                {field.required && (
+                  <span className="ml-0.5 text-destructive">*</span>
+                )}
+              </label>
+              <Input
+                type={field.secret ? 'password' : 'text'}
+                value={form[field.key] ?? ''}
+                placeholder={field.placeholder}
+                autoComplete="off"
+                onChange={(e) =>
+                  setValues({ ...form, [field.key]: e.target.value })
+                }
+              />
+              {field.description && (
+                <p className="mt-1 text-xs text-faint">{field.description}</p>
+              )}
+            </div>
+          ))}
+
+          {error && (
+            <p className="rounded-lg bg-destructive-soft px-3 py-2 text-[13px] text-destructive">
+              {error}
+            </p>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={onClose}>
+              取消
+            </Button>
+            <Button
+              onClick={() => void handleSave()}
+              disabled={updateSettings.isPending || missing.length > 0}
+            >
+              {updateSettings.isPending ? '保存中...' : '保存'}
+            </Button>
           </div>
-        )}
-        <div>
-          <p className="mb-1.5 text-[13px] font-medium">我的配置（JSON）</p>
-          <Textarea
-            value={value}
-            onChange={(e) => setText(e.target.value)}
-            rows={6}
-            className="font-mono text-xs"
-          />
         </div>
-        {error && (
-          <p className="rounded-lg bg-destructive-soft px-3 py-2 text-[13px] text-destructive">
-            {error}
-          </p>
-        )}
-        <div className="flex justify-end gap-2">
-          <Button variant="outline" onClick={onClose}>
-            取消
-          </Button>
-          <Button
-            onClick={() => void handleSave()}
-            disabled={updateSettings.isPending}
-          >
-            保存
-          </Button>
-        </div>
-      </div>
+      )}
     </Dialog>
   );
 }
@@ -135,7 +155,7 @@ function ToolkitsPage() {
                     {toolkit.id}
                   </p>
                 </div>
-                {toolkit.settingsSchema && (
+                {(toolkit.settingsFields?.length ?? 0) > 0 && (
                   <Button
                     size="iconSm"
                     variant="ghost"

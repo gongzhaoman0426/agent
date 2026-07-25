@@ -119,7 +119,8 @@ model Toolkit {
   id                  String                @id
   name                String
   description         String
-  settingsSchema      Json?
+  /** SettingField[]：用户级配置字段声明，前端据此渲染表单 */
+  settingsFields      Json?
   deleted             Boolean               @default(false)
   tools               Tool[]
   agentToolkits       AgentToolkit[]
