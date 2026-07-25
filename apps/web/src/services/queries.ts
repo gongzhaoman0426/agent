@@ -33,14 +33,23 @@ export function useAgents() {
   });
 }
 
+export function useAgent(id: string | null) {
+  return useQuery({
+    queryKey: ['agents', id],
+    queryFn: () => api.get<Agent>(`/agents/${id}`),
+    enabled: Boolean(id),
+  });
+}
+
 export interface AgentFormData {
-  name: string;
+  name?: string;
   description?: string;
-  prompt: string;
+  prompt?: string;
   model?: string;
-  toolkitIds: string[];
-  workflowIds: string[];
-  skillNames: string[];
+  toolkitIds?: string[];
+  workflowIds?: string[];
+  skillNames?: string[];
+  subAgentIds?: string[];
 }
 
 export function useCreateAgent() {
@@ -57,8 +66,10 @@ export function useUpdateAgent() {
   return useMutation({
     mutationFn: ({ id, data }: { id: string; data: AgentFormData }) =>
       api.put<Agent>(`/agents/${id}`, data),
-    onSuccess: () =>
-      queryClient.invalidateQueries({ queryKey: queryKeys.agents }),
+    onSuccess: (updated) => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.agents });
+      queryClient.setQueryData(['agents', updated.id], updated);
+    },
   });
 }
 
@@ -141,6 +152,28 @@ export function useSkillDetail(name: string | null) {
     queryKey: ['skills', name],
     queryFn: () => api.get<SkillDetail>(`/skills/${name}`),
     enabled: Boolean(name),
+  });
+}
+
+export function useUploadSkill() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (file: File) => {
+      const formData = new FormData();
+      formData.append('file', file);
+      return api.upload<SkillSummary>('/skills/upload', formData);
+    },
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.skills }),
+  });
+}
+
+export function useDeleteSkill() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (name: string) => api.delete(`/skills/${name}`),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.skills }),
   });
 }
 

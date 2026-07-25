@@ -20,6 +20,7 @@ model User {
   accounts            Account[]
   sessions            Session[]
   userToolkitSettings UserToolkitSettings[]
+  skills              Skill[]
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
 
@@ -87,11 +88,29 @@ model Agent {
   agentToolkits  AgentToolkit[]
   agentWorkflows AgentWorkflow[]
   agentSkills    AgentSkill[]
+  /** 挂载在本智能体上的子智能体 */
+  subAgents      AgentSubAgent[] @relation("SubAgentParent")
+  /** 本智能体被哪些智能体挂载 */
+  parentAgents   AgentSubAgent[] @relation("SubAgentChild")
   createdAt      DateTime        @default(now())
   updatedAt      DateTime        @updatedAt
 
   @@index([createdById, deleted])
   @@map("agents")
+}
+
+// 智能体互挂：子智能体作为父智能体的一个工具
+model AgentSubAgent {
+  id        String   @id @default(cuid())
+  parentId  String
+  childId   String
+  parent    Agent    @relation("SubAgentParent", fields: [parentId], references: [id], onDelete: Cascade)
+  child     Agent    @relation("SubAgentChild", fields: [childId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([parentId, childId])
+  @@index([childId])
+  @@map("agent_sub_agents")
 }
 
 // ============ Toolkit 注册表（代码发现同步） ============
@@ -165,7 +184,26 @@ model AgentWorkflow {
   @@map("agent_workflows")
 }
 
-// Skill 是文件（skills/<name>/SKILL.md），挂载关系按 skill name 引用
+// ============ Skill（用户上传的技能包，文件存 data/skills，元数据入库） ============
+
+model Skill {
+  id          String   @id @default(cuid())
+  name        String
+  description String
+  ownerId     String
+  owner       User     @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+  /** 相对 data/skills 的存储目录（<ownerId>/<name>） */
+  dirPath     String
+  scripts     Json     @default("[]")
+  references  Json     @default("[]")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([ownerId, name])
+  @@map("skills")
+}
+
+// 挂载关系按 skill name 引用（同一 owner 下唯一）
 model AgentSkill {
   id        String   @id @default(cuid())
   agentId   String

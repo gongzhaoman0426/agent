@@ -12,6 +12,11 @@ export interface AgentSkillMount {
   skillName: string;
 }
 
+export interface AgentSubAgentMount {
+  childId: string;
+  child: { id: string; name: string; description?: string | null };
+}
+
 export interface Agent {
   id: string;
   name: string;
@@ -23,6 +28,7 @@ export interface Agent {
   agentToolkits: AgentToolkitMount[];
   agentWorkflows: AgentWorkflowMount[];
   agentSkills: AgentSkillMount[];
+  subAgents: AgentSubAgentMount[];
 }
 
 export interface Tool {
@@ -48,9 +54,12 @@ export interface Workflow {
 }
 
 export interface SkillSummary {
+  id: string;
   name: string;
   description: string;
   hasScripts: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface SkillDetail extends SkillSummary {

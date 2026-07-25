@@ -124,13 +124,16 @@ export class MastraService {
       'openai/text-embedding-3-small';
 
     this.memory = new Memory({
+      // Mastra 自建表放独立 schema，避免与 Prisma 管理的 public 互相干扰
       storage: new PostgresStore({
         id: 'agent-next-storage',
         connectionString,
+        schemaName: 'mastra',
       }),
       vector: new PgVector({
         id: 'agent-next-vector',
         connectionString,
+        schemaName: 'mastra',
       }),
       embedder: new ModelRouterEmbeddingModel(embeddingModel),
       options: {

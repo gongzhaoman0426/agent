@@ -13,6 +13,7 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppChatRouteImport } from './routes/_app/chat'
+import { Route as AppAgentsAgentIdRouteImport } from './routes/_app/agents.$agentId'
 import { Route as AppManageAgentsRouteImport } from './routes/_app/manage.agents'
 import { Route as AppManageSkillsRouteImport } from './routes/_app/manage.skills'
 import { Route as AppManageToolkitsRouteImport } from './routes/_app/manage.toolkits'
@@ -35,6 +36,11 @@ const LoginRoute = LoginRouteImport.update({
 const AppChatRoute = AppChatRouteImport.update({
   id: '/chat',
   path: '/chat',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppAgentsAgentIdRoute = AppAgentsAgentIdRouteImport.update({
+  id: '/agents/$agentId',
+  path: '/agents/$agentId',
   getParentRoute: () => AppRoute,
 } as any)
 const AppManageAgentsRoute = AppManageAgentsRouteImport.update({
@@ -62,6 +68,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/chat': typeof AppChatRoute
+  '/agents/$agentId': typeof AppAgentsAgentIdRoute
   '/manage/agents': typeof AppManageAgentsRoute
   '/manage/skills': typeof AppManageSkillsRoute
   '/manage/toolkits': typeof AppManageToolkitsRoute
@@ -71,6 +78,7 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/chat': typeof AppChatRoute
+  '/agents/$agentId': typeof AppAgentsAgentIdRoute
   '/manage/agents': typeof AppManageAgentsRoute
   '/manage/skills': typeof AppManageSkillsRoute
   '/manage/toolkits': typeof AppManageToolkitsRoute
@@ -82,6 +90,7 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/_app/chat': typeof AppChatRoute
+  '/_app/agents/$agentId': typeof AppAgentsAgentIdRoute
   '/_app/manage/agents': typeof AppManageAgentsRoute
   '/_app/manage/skills': typeof AppManageSkillsRoute
   '/_app/manage/toolkits': typeof AppManageToolkitsRoute
@@ -93,6 +102,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/chat'
+    | '/agents/$agentId'
     | '/manage/agents'
     | '/manage/skills'
     | '/manage/toolkits'
@@ -102,6 +112,7 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/chat'
+    | '/agents/$agentId'
     | '/manage/agents'
     | '/manage/skills'
     | '/manage/toolkits'
@@ -112,6 +123,7 @@ export interface FileRouteTypes {
     | '/_app'
     | '/login'
     | '/_app/chat'
+    | '/_app/agents/$agentId'
     | '/_app/manage/agents'
     | '/_app/manage/skills'
     | '/_app/manage/toolkits'
@@ -154,6 +166,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppChatRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/agents/$agentId': {
+      id: '/_app/agents/$agentId'
+      path: '/agents/$agentId'
+      fullPath: '/agents/$agentId'
+      preLoaderRoute: typeof AppAgentsAgentIdRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/manage/agents': {
       id: '/_app/manage/agents'
       path: '/manage/agents'
@@ -187,6 +206,7 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppChatRoute: typeof AppChatRoute
+  AppAgentsAgentIdRoute: typeof AppAgentsAgentIdRoute
   AppManageAgentsRoute: typeof AppManageAgentsRoute
   AppManageSkillsRoute: typeof AppManageSkillsRoute
   AppManageToolkitsRoute: typeof AppManageToolkitsRoute
@@ -195,6 +215,7 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppChatRoute: AppChatRoute,
+  AppAgentsAgentIdRoute: AppAgentsAgentIdRoute,
   AppManageAgentsRoute: AppManageAgentsRoute,
   AppManageSkillsRoute: AppManageSkillsRoute,
   AppManageToolkitsRoute: AppManageToolkitsRoute,

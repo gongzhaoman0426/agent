@@ -3,3 +3,6 @@ dist/
 .env
 *.tsbuildinfo
 .DS_Store
+
+# 用户上传的技能包存储
+apps/api/data/

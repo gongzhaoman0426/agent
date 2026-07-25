@@ -62,47 +62,100 @@ function LoginPage() {
   };
 
   return (
-    <div className="flex h-full items-center justify-center bg-muted/50">
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-card p-8 shadow-lg">
-        <div className="mb-6 flex flex-col items-center gap-2">
-          <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-primary text-primary-foreground">
-            <Bot className="h-6 w-6" />
+    <div className="flex h-full">
+      {/* 品牌区 */}
+      <div className="relative hidden flex-1 flex-col justify-between overflow-hidden bg-gradient-to-br from-[oklch(0.35_0.16_275)] via-[oklch(0.45_0.2_285)] to-[oklch(0.5_0.19_310)] p-10 text-white lg:flex">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-40"
+          style={{
+            backgroundImage:
+              'radial-gradient(circle at 20% 30%, oklch(0.7 0.15 310 / 0.4) 0%, transparent 45%), radial-gradient(circle at 80% 70%, oklch(0.6 0.18 250 / 0.5) 0%, transparent 50%)',
+          }}
+        />
+        <div className="relative flex items-center gap-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-white/15 backdrop-blur">
+            <Bot className="h-5 w-5" />
           </div>
-          <h1 className="text-xl font-semibold">Agent Next</h1>
-          <p className="text-sm text-muted-foreground">
-            {mode === 'login' ? '登录你的账号' : '创建新账号'}
+          <span className="text-lg font-semibold tracking-tight">
+            Agent Next
+          </span>
+        </div>
+        <div className="relative max-w-md">
+          <h2 className="text-3xl font-semibold leading-snug tracking-tight">
+            构建你的
+            <br />
+            AI 智能体工作空间
+          </h2>
+          <p className="mt-4 text-[15px] leading-relaxed text-white/70">
+            挂载插件工具与工作流，上传技能包按需激活，基于 Mastra
+            的记忆与语义召回让对话更懂上下文。
           </p>
         </div>
+        <p className="relative text-xs text-white/40">
+          Powered by Mastra · NestJS · TanStack Router
+        </p>
+      </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            placeholder="用户名"
-            value={username}
-            onChange={(e) => setUsername(e.target.value)}
-            required
-            minLength={2}
-          />
-          <Input
-            type="password"
-            placeholder="密码（至少 6 位）"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            required
-            minLength={6}
-          />
-          {error && <p className="text-sm text-destructive">{error}</p>}
-          <Button type="submit" className="w-full" disabled={loading}>
-            {loading ? '处理中...' : mode === 'login' ? '登录' : '注册'}
-          </Button>
-        </form>
+      {/* 表单区 */}
+      <div className="flex flex-1 items-center justify-center bg-background px-6">
+        <div className="w-full max-w-sm animate-rise">
+          <div className="mb-8">
+            <h1 className="text-2xl font-semibold tracking-tight">
+              {mode === 'login' ? '欢迎回来' : '创建账号'}
+            </h1>
+            <p className="mt-1.5 text-sm text-muted-foreground">
+              {mode === 'login'
+                ? '登录以继续使用你的智能体'
+                : '注册一个新的工作空间账号'}
+            </p>
+          </div>
 
-        <button
-          type="button"
-          className="mt-4 w-full text-center text-sm text-muted-foreground hover:text-foreground"
-          onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
-        >
-          {mode === 'login' ? '没有账号？注册' : '已有账号？登录'}
-        </button>
+          <form onSubmit={handleSubmit} className="space-y-4">
+            <div>
+              <label className="mb-1.5 block text-[13px] font-medium">
+                用户名
+              </label>
+              <Input
+                placeholder="输入用户名"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                required
+                minLength={2}
+                className="h-10"
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-[13px] font-medium">
+                密码
+              </label>
+              <Input
+                type="password"
+                placeholder="至少 6 位"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                minLength={6}
+                className="h-10"
+              />
+            </div>
+            {error && (
+              <p className="rounded-lg bg-destructive-soft px-3 py-2 text-[13px] text-destructive">
+                {error}
+              </p>
+            )}
+            <Button type="submit" size="lg" className="w-full" disabled={loading}>
+              {loading ? '处理中...' : mode === 'login' ? '登录' : '注册'}
+            </Button>
+          </form>
+
+          <button
+            type="button"
+            className="mt-5 w-full text-center text-[13px] text-muted-foreground transition-colors hover:text-primary"
+            onClick={() => setMode(mode === 'login' ? 'register' : 'login')}
+          >
+            {mode === 'login' ? '没有账号？立即注册' : '已有账号？直接登录'}
+          </button>
+        </div>
       </div>
     </div>
   );

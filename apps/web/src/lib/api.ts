@@ -41,6 +41,32 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return (await response.json()) as T;
 }
 
+async function requestUpload<T>(path: string, formData: FormData): Promise<T> {
+  // 不设置 Content-Type，浏览器会自动带 multipart boundary
+  const response = await fetch(`${API_BASE}${path}`, {
+    method: 'POST',
+    credentials: 'include',
+    body: formData,
+  });
+
+  if (response.status === 401) {
+    setStoredUser(null);
+    window.location.href = '/login';
+    throw new ApiError(401, '未登录');
+  }
+  if (!response.ok) {
+    let message = `上传失败 (${response.status})`;
+    try {
+      const body = (await response.json()) as { message?: string };
+      if (body.message) message = body.message;
+    } catch {
+      // ignore
+    }
+    throw new ApiError(response.status, message);
+  }
+  return (await response.json()) as T;
+}
+
 export const api = {
   get: <T>(path: string) => request<T>(path),
   post: <T>(path: string, body?: unknown) =>
@@ -48,6 +74,8 @@ export const api = {
   put: <T>(path: string, body?: unknown) =>
     request<T>(path, { method: 'PUT', body: JSON.stringify(body ?? {}) }),
   delete: <T>(path: string) => request<T>(path, { method: 'DELETE' }),
+  upload: <T>(path: string, formData: FormData) =>
+    requestUpload<T>(path, formData),
 };
 
 // ============ SSE 流式对话 ============

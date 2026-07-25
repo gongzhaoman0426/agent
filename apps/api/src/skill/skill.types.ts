@@ -1,21 +1,17 @@
-export interface SkillDefinition {
-  /** 目录名，即技能唯一标识 */
-  name: string;
-  description: string;
-  /** SKILL.md 正文（不含 frontmatter） */
-  content: string;
-  /** 技能目录绝对路径 */
-  dir: string;
-  /** references/ 下的文件名列表 */
-  references: string[];
-  /** scripts/ 下的 .js 脚本文件名列表 */
-  scripts: string[];
-}
-
 export interface SkillSummary {
+  id: string;
   name: string;
   description: string;
   hasScripts: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+export interface SkillDetail extends SkillSummary {
+  /** SKILL.md 正文（不含 frontmatter） */
+  content: string;
+  references: string[];
+  scripts: string[];
 }
 
 export interface ActivatedSkill {

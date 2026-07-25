@@ -22,6 +22,7 @@
     "@nestjs/core": "^11.1.0",
     "@nestjs/platform-express": "^11.1.0",
     "@prisma/client": "^6.19.0",
+    "adm-zip": "^0.6.0",
     "bcryptjs": "^3.0.0",
     "better-auth": "^1.6.25",
     "express": "^5.0.0",
@@ -32,7 +33,9 @@
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.0",
+    "@types/adm-zip": "^0.5.8",
     "@types/express": "^5.0.0",
+    "@types/multer": "^2.2.0",
     "@types/node": "^22.10.0",
     "prisma": "^6.19.0",
     "typescript": "^5.8.0"

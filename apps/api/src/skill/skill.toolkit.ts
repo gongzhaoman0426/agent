@@ -2,12 +2,16 @@ import { createTool } from '@mastra/core/tools';
 import { z } from 'zod';
 import type { ToolsInput } from '@mastra/core/agent';
 import { toolkitId } from '../toolkit/toolkit.decorator.js';
-import type { ToolkitDefinition } from '../toolkit/toolkit.types.js';
+import {
+  REQUEST_CONTEXT_KEYS,
+  type ToolkitDefinition,
+} from '../toolkit/toolkit.types.js';
 import { SkillService } from './skill.service.js';
 
 /**
  * 技能工具包：Agent 挂载技能后自动附带（见 AgentRegistryService），
  * use_skill 按需加载技能全文，避免把长指令塞进 system prompt。
+ * 技能归属用户，通过 requestContext 中的 userId 定位。
  */
 @toolkitId('skill-toolkit')
 export class SkillToolkit implements ToolkitDefinition {
@@ -32,8 +36,20 @@ export class SkillToolkit implements ToolkitDefinition {
             .optional()
             .describe('传给脚本的入参对象'),
         }),
-        execute: async ({ name, runScripts, scriptInput }) =>
-          this.skillService.activate(name, runScripts ?? false, scriptInput),
+        execute: async ({ name, runScripts, scriptInput }, context) => {
+          const userId = context.requestContext.get(
+            REQUEST_CONTEXT_KEYS.userId,
+          );
+          if (typeof userId !== 'string' || !userId) {
+            throw new Error('缺少用户上下文，无法加载技能');
+          }
+          return this.skillService.activate(
+            userId,
+            name,
+            runScripts ?? false,
+            scriptInput,
+          );
+        },
       }),
     };
   }

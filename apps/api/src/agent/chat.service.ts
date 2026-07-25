@@ -47,7 +47,7 @@ export class ChatService {
       agent,
     );
 
-    const instance = this.registry.getInstance(agent);
+    const instance = await this.registry.getInstance(agent);
     const requestContext = await this.buildRequestContext(
       userId,
       agent.id,
@@ -89,7 +89,7 @@ export class ChatService {
       agent,
     );
 
-    const instance = this.registry.getInstance(agent);
+    const instance = await this.registry.getInstance(agent);
     const requestContext = await this.buildRequestContext(
       userId,
       agent.id,
