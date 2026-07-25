@@ -13,6 +13,7 @@ import type {
   SkillFileNode,
   SkillSummary,
   Toolkit,
+  UiMessage,
   Workflow,
 } from '@/types';
 
@@ -277,9 +278,7 @@ export function useSkillAssistantHistory(name: string) {
   return useQuery({
     queryKey: queryKeys.skillAssistant(name),
     queryFn: () =>
-      api.get<Array<{ id: string; role: 'user' | 'assistant'; content: string }>>(
-        `/skills/${name}/assistant/history`,
-      ),
+      api.get<UiMessage[]>(`/skills/${name}/assistant/history`),
     enabled: Boolean(name),
     staleTime: Infinity,
   });

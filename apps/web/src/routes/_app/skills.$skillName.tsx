@@ -326,9 +326,8 @@ function AssistantPanel({
     if (history) {
       setMessages(
         history.map((message) => ({
+          ...message,
           id: message.id || generateUUID(),
-          role: message.role,
-          content: message.content,
         })),
       );
     }

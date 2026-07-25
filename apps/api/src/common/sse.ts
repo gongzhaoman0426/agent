@@ -1,5 +1,6 @@
 import type { Logger } from '@nestjs/common';
 import type { Response } from 'express';
+import { truncateToolResult } from './tool-result.js';
 
 /** 前端约定的 SSE 事件协议，智能体对话与技能助手共用 */
 export interface SseChunk {
@@ -12,7 +13,6 @@ interface StreamChunk {
   payload?: unknown;
 }
 
-const TOOL_RESULT_MAX_LENGTH = 1000;
 const HEARTBEAT_INTERVAL_MS = 15_000;
 
 /** Mastra fullStream 分片 → 前端事件；不关心的分片返回 null */
@@ -36,22 +36,15 @@ export function mapStreamChunk(
           toolKwargs: payload.args ?? payload.input ?? {},
         },
       };
-    case 'tool-result': {
-      let result = payload.result ?? payload.output;
-      const serialized =
-        typeof result === 'string' ? result : JSON.stringify(result ?? null);
-      if (serialized.length > TOOL_RESULT_MAX_LENGTH) {
-        result = `${serialized.slice(0, TOOL_RESULT_MAX_LENGTH)}...[已截断]`;
-      }
+    case 'tool-result':
       return {
         event: 'tool_result',
         data: {
           toolId: String(payload.toolCallId ?? ''),
           toolName: String(payload.toolName ?? ''),
-          result,
+          result: truncateToolResult(payload.result ?? payload.output),
         },
       };
-    }
     case 'error': {
       logger?.error(`流式响应错误: ${JSON.stringify(payload)}`);
       return {

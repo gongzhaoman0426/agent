@@ -120,9 +120,5 @@ export interface UiMessage {
 }
 
 export interface SessionDetail extends ChatSession {
-  messages: Array<{
-    id: string;
-    role: 'user' | 'assistant';
-    content: string;
-  }>;
+  messages: UiMessage[];
 }

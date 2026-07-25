@@ -155,13 +155,7 @@ function ChatPage() {
   // 打开历史会话：加载消息、锁定 Agent
   useEffect(() => {
     if (sessionDetail) {
-      setMessages(
-        sessionDetail.messages.map((message) => ({
-          id: message.id,
-          role: message.role,
-          content: message.content,
-        })),
-      );
+      setMessages(sessionDetail.messages);
       if (sessionDetail.agentId) {
         setAgentId(sessionDetail.agentId);
       }
