@@ -1,11 +1,11 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { createFileRoute } from '@tanstack/react-router';
 import { Play, Workflow as WorkflowIcon } from 'lucide-react';
 import { useExecuteWorkflow, useWorkflows } from '@/services/queries';
 import type { Workflow } from '@/types';
 import { Button } from '@/ui/button';
 import { Dialog } from '@/ui/dialog';
-import { Textarea } from '@/ui/input';
+import { Input, Textarea } from '@/ui/input';
 import {
   CardGrid,
   EmptyState,
@@ -17,6 +17,105 @@ export const Route = createFileRoute('/_app/manage/workflows')({
   component: WorkflowsPage,
 });
 
+/** 从 JSON Schema 抽出可渲染为字符串输入框的字段（与 toolkit settings 同体验） */
+interface InputField {
+  key: string;
+  label: string;
+  description?: string;
+  placeholder?: string;
+  required: boolean;
+  type: 'string' | 'number' | 'boolean' | 'json';
+}
+
+function schemaType(prop: Record<string, unknown>): InputField['type'] {
+  const raw = prop.type;
+  const types = Array.isArray(raw) ? raw.filter((t) => t !== 'null') : [raw];
+  if (types.length === 1 && types[0] === 'string') return 'string';
+  if (types.length === 1 && types[0] === 'number') return 'number';
+  if (types.length === 1 && types[0] === 'integer') return 'number';
+  if (types.length === 1 && types[0] === 'boolean') return 'boolean';
+  return 'json';
+}
+
+function fieldsFromInputSchema(
+  inputSchema: Record<string, unknown> | null | undefined,
+): InputField[] {
+  if (!inputSchema || typeof inputSchema !== 'object') return [];
+  const properties = inputSchema.properties;
+  if (!properties || typeof properties !== 'object' || Array.isArray(properties)) {
+    return [];
+  }
+  const required = new Set(
+    Array.isArray(inputSchema.required)
+      ? inputSchema.required.filter((k): k is string => typeof k === 'string')
+      : [],
+  );
+
+  return Object.entries(properties as Record<string, unknown>).map(
+    ([key, value]) => {
+      const prop =
+        value && typeof value === 'object' && !Array.isArray(value)
+          ? (value as Record<string, unknown>)
+          : {};
+      const type = schemaType(prop);
+      const description =
+        typeof prop.description === 'string' ? prop.description : undefined;
+      const title = typeof prop.title === 'string' ? prop.title : undefined;
+      return {
+        key,
+        label: title ?? key,
+        description,
+        placeholder: description,
+        required: required.has(key),
+        type,
+      };
+    },
+  );
+}
+
+function buildInputPayload(
+  fields: InputField[],
+  values: Record<string, string>,
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = {};
+  for (const field of fields) {
+    const raw = values[field.key] ?? '';
+    const trimmed = raw.trim();
+    if (!trimmed) {
+      if (field.required) {
+        throw new Error(`请填写 ${field.label}`);
+      }
+      continue;
+    }
+    if (field.type === 'number') {
+      const n = Number(trimmed);
+      if (Number.isNaN(n)) {
+        throw new Error(`${field.label} 必须是数字`);
+      }
+      payload[field.key] = n;
+      continue;
+    }
+    if (field.type === 'boolean') {
+      if (trimmed === 'true' || trimmed === 'false') {
+        payload[field.key] = trimmed === 'true';
+      } else {
+        throw new Error(`${field.label} 请输入 true 或 false`);
+      }
+      continue;
+    }
+    if (field.type === 'json') {
+      try {
+        payload[field.key] = JSON.parse(trimmed) as unknown;
+      } catch {
+        throw new Error(`${field.label} JSON 格式错误`);
+      }
+      continue;
+    }
+    payload[field.key] = trimmed;
+  }
+  return payload;
+}
+
 function RunDialog({
   workflow,
   onClose,
@@ -25,16 +124,30 @@ function RunDialog({
   onClose: () => void;
 }) {
   const executeWorkflow = useExecuteWorkflow();
-  const [input, setInput] = useState('{}');
+  const fields = useMemo(
+    () => fieldsFromInputSchema(workflow.inputSchema),
+    [workflow.inputSchema],
+  );
+  const useForm = fields.length > 0;
+  const [values, setValues] = useState<Record<string, string>>(() =>
+    Object.fromEntries(fields.map((field) => [field.key, ''])),
+  );
+  const [jsonInput, setJsonInput] = useState('{}');
   const [error, setError] = useState('');
+
+  const missing = fields.filter(
+    (field) => field.required && !values[field.key]?.trim(),
+  );
 
   const handleRun = () => {
     setError('');
     let parsed: Record<string, unknown>;
     try {
-      parsed = JSON.parse(input) as Record<string, unknown>;
-    } catch {
-      setError('JSON 格式错误');
+      parsed = useForm
+        ? buildInputPayload(fields, values)
+        : (JSON.parse(jsonInput) as Record<string, unknown>);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '输入格式错误');
       return;
     }
     executeWorkflow.mutate(
@@ -51,23 +164,56 @@ function RunDialog({
       className="max-w-xl"
     >
       <div className="space-y-4">
-        {workflow.inputSchema && (
+        {useForm ? (
+          fields.map((field) => (
+            <div key={field.key}>
+              <label className="mb-1.5 block text-[13px] font-medium">
+                {field.label}
+                {field.required && (
+                  <span className="ml-0.5 text-destructive">*</span>
+                )}
+              </label>
+              {field.type === 'json' ? (
+                <Textarea
+                  value={values[field.key] ?? ''}
+                  placeholder={field.placeholder ?? '{}'}
+                  rows={3}
+                  className="font-mono text-xs"
+                  onChange={(e) =>
+                    setValues({ ...values, [field.key]: e.target.value })
+                  }
+                />
+              ) : (
+                <Input
+                  type="text"
+                  value={values[field.key] ?? ''}
+                  placeholder={
+                    field.placeholder ??
+                    (field.type === 'boolean' ? 'true / false' : undefined)
+                  }
+                  autoComplete="off"
+                  onChange={(e) =>
+                    setValues({ ...values, [field.key]: e.target.value })
+                  }
+                />
+              )}
+              {field.description && (
+                <p className="mt-1 text-xs text-faint">{field.description}</p>
+              )}
+            </div>
+          ))
+        ) : (
           <div>
-            <p className="mb-1.5 text-[13px] font-medium">输入 Schema</p>
-            <pre className="max-h-32 overflow-y-auto rounded-xl bg-muted p-3 font-mono text-xs">
-              {JSON.stringify(workflow.inputSchema, null, 2)}
-            </pre>
+            <p className="mb-1.5 text-[13px] font-medium">输入（JSON）</p>
+            <Textarea
+              value={jsonInput}
+              onChange={(e) => setJsonInput(e.target.value)}
+              rows={4}
+              className="font-mono text-xs"
+            />
           </div>
         )}
-        <div>
-          <p className="mb-1.5 text-[13px] font-medium">输入（JSON）</p>
-          <Textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            rows={4}
-            className="font-mono text-xs"
-          />
-        </div>
+
         {error && (
           <p className="rounded-lg bg-destructive-soft px-3 py-2 text-[13px] text-destructive">
             {error}
@@ -85,7 +231,10 @@ function RunDialog({
           <Button variant="outline" onClick={onClose}>
             关闭
           </Button>
-          <Button onClick={handleRun} disabled={executeWorkflow.isPending}>
+          <Button
+            onClick={handleRun}
+            disabled={executeWorkflow.isPending || missing.length > 0}
+          >
             <Play className="h-3.5 w-3.5" />
             {executeWorkflow.isPending ? '执行中...' : '执行'}
           </Button>
