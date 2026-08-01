@@ -77,6 +77,9 @@ interface PickOption {
   id: string;
   label: string;
   description?: string;
+  /** true 时禁止新勾选（已勾选仍可取消） */
+  disabled?: boolean;
+  disabledReason?: string;
 }
 
 // ---- 挂载多选弹窗 ----
@@ -99,9 +102,15 @@ function MountPicker({
   const [checked, setChecked] = useState<string[]>(selected);
 
   const toggle = (id: string) => {
-    setChecked((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id],
-    );
+    const option = options.find((item) => item.id === id);
+    setChecked((prev) => {
+      if (prev.includes(id)) {
+        return prev.filter((item) => item !== id);
+      }
+      // 未配置 settings 的工具包不允许新挂载
+      if (option?.disabled) return prev;
+      return [...prev, id];
+    });
   };
 
   return (
@@ -113,34 +122,47 @@ function MountPicker({
           </p>
         ) : (
           <div className="max-h-80 space-y-1.5 overflow-y-auto pr-1">
-            {options.map((option) => (
-              <label
-                key={option.id}
-                className={cn(
-                  'flex cursor-pointer items-start gap-2.5 rounded-xl border px-3 py-2.5 transition-colors',
-                  checked.includes(option.id)
-                    ? 'border-primary/40 bg-primary-soft'
-                    : 'border-border hover:bg-muted',
-                )}
-              >
-                <input
-                  type="checkbox"
-                  className="mt-1 accent-[var(--color-primary)]"
-                  checked={checked.includes(option.id)}
-                  onChange={() => toggle(option.id)}
-                />
-                <span className="min-w-0">
-                  <span className="block text-[13px] font-medium">
-                    {option.label}
-                  </span>
-                  {option.description && (
-                    <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                      {option.description}
-                    </span>
+            {options.map((option) => {
+              const isChecked = checked.includes(option.id);
+              const locked = Boolean(option.disabled) && !isChecked;
+              return (
+                <label
+                  key={option.id}
+                  className={cn(
+                    'flex items-start gap-2.5 rounded-xl border px-3 py-2.5 transition-colors',
+                    locked
+                      ? 'cursor-not-allowed border-border bg-muted/40 opacity-70'
+                      : 'cursor-pointer',
+                    !locked && isChecked
+                      ? 'border-primary/40 bg-primary-soft'
+                      : !locked && 'border-border hover:bg-muted',
                   )}
-                </span>
-              </label>
-            ))}
+                >
+                  <input
+                    type="checkbox"
+                    className="mt-1 accent-[var(--color-primary)]"
+                    checked={isChecked}
+                    disabled={locked}
+                    onChange={() => toggle(option.id)}
+                  />
+                  <span className="min-w-0">
+                    <span className="block text-[13px] font-medium">
+                      {option.label}
+                    </span>
+                    {option.description && (
+                      <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                        {option.description}
+                      </span>
+                    )}
+                    {option.disabled && option.disabledReason && (
+                      <span className="mt-0.5 block text-xs text-amber-700 dark:text-amber-400">
+                        {option.disabledReason}
+                      </span>
+                    )}
+                  </span>
+                </label>
+              );
+            })}
           </div>
         )}
         <div className="flex justify-end gap-2">
@@ -149,7 +171,12 @@ function MountPicker({
           </Button>
           <Button
             onClick={() => {
-              onConfirm(checked);
+              // 未配置 settings 的项不允许挂载（含历史残留勾选）
+              const next = checked.filter((id) => {
+                const option = options.find((item) => item.id === id);
+                return !option?.disabled;
+              });
+              onConfirm(next);
               onClose();
             }}
           >
@@ -514,11 +541,21 @@ function OrchestratePage() {
     () =>
       (toolkits ?? [])
         .filter((toolkit) => toolkit.id !== SKILL_TOOLKIT_ID)
-        .map((toolkit) => ({
-          id: toolkit.id,
-          label: toolkit.name,
-          description: toolkit.description,
-        })),
+        .map((toolkit) => {
+          const needsSettings = (toolkit.settingsFields ?? []).some(
+            (field) => field.required,
+          );
+          const blocked = needsSettings && toolkit.settingsReady !== true;
+          return {
+            id: toolkit.id,
+            label: toolkit.name,
+            description: toolkit.description,
+            disabled: blocked,
+            disabledReason: blocked
+              ? '请先在「插件工具」页完成必填配置'
+              : undefined,
+          };
+        }),
     [toolkits],
   );
   const workflowOptions = useMemo<PickOption[]>(

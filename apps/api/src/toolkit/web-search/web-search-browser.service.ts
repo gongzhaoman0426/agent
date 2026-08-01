@@ -36,7 +36,9 @@ export class WebSearchBrowserService implements OnModuleInit, OnModuleDestroy {
       this.logger.log('无头 Chromium 已启动（web-search）');
     } catch (error) {
       this.logger.error(
-        `无头 Chromium 启动失败，联网搜索将不可用：${String(error)}。请执行 pnpm exec playwright install chromium`,
+        `无头 Chromium 启动失败，联网搜索将不可用：${String(error)}。` +
+          `请执行 pnpm exec playwright install chromium；` +
+          `Linux 若缺 libatk 等系统库，再执行 sudo pnpm exec playwright install-deps chromium`,
       );
     }
   }
@@ -73,6 +75,21 @@ export class WebSearchBrowserService implements OnModuleInit, OnModuleDestroy {
           }
         });
         return browser;
+      })
+      .catch((error: unknown) => {
+        const message = String(error);
+        if (
+          message.includes('shared libraries') ||
+          message.includes('libatk') ||
+          message.includes('exit code 127')
+        ) {
+          throw new Error(
+            `无头浏览器缺少系统依赖（如 libatk）：请在服务器项目根目录执行 ` +
+              `sudo pnpm --filter @agent-next/api exec playwright install-deps chromium，` +
+              `然后 pm2 restart agent-next-api。原始错误：${message}`,
+          );
+        }
+        throw error instanceof Error ? error : new Error(message);
       })
       .finally(() => {
         this.launching = null;

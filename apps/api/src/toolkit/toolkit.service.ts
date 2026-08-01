@@ -7,7 +7,11 @@ import type { ToolsInput } from '@mastra/core/agent';
 import type { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ToolkitDiscoveryService } from './toolkit-discovery.service.js';
-import type { ToolkitDefinition, ToolkitSettings } from './toolkit.types.js';
+import type {
+  SettingField,
+  ToolkitDefinition,
+  ToolkitSettings,
+} from './toolkit.types.js';
 
 @Injectable()
 export class ToolkitService {
@@ -22,6 +26,81 @@ export class ToolkitService {
       include: { tools: true },
       orderBy: { id: 'asc' },
     });
+  }
+
+  /** 列表附带当前用户是否已配齐必填 settings，供前端禁用未配置挂载 */
+  async listForUser(userId: string) {
+    const [toolkits, settingsMap] = await Promise.all([
+      this.list(),
+      this.getSettingsMap(userId),
+    ]);
+    return toolkits.map((toolkit) => ({
+      ...toolkit,
+      settingsReady: this.isSettingsReady(
+        toolkit.settingsFields,
+        settingsMap[toolkit.id] as ToolkitSettings | undefined,
+      ),
+    }));
+  }
+
+  /**
+   * 挂载前校验：声明了必填 settings 的 toolkit，用户必须先配齐，
+   * 否则拒绝挂到 Agent 上。
+   */
+  async assertToolkitsConfigured(userId: string, toolkitIds: string[]) {
+    if (toolkitIds.length === 0) return;
+
+    const toolkits = await this.prisma.toolkit.findMany({
+      where: { id: { in: toolkitIds }, deleted: false },
+      select: { id: true, name: true, settingsFields: true },
+    });
+    const byId = new Map(toolkits.map((item) => [item.id, item]));
+    const settingsMap = await this.getSettingsMap(userId);
+    const blocked: string[] = [];
+
+    for (const toolkitId of toolkitIds) {
+      const toolkit = byId.get(toolkitId);
+      if (!toolkit) {
+        throw new BadRequestException(`工具包不存在: ${toolkitId}`);
+      }
+      if (
+        !this.isSettingsReady(
+          toolkit.settingsFields,
+          settingsMap[toolkitId] as ToolkitSettings | undefined,
+        )
+      ) {
+        blocked.push(toolkit.name);
+      }
+    }
+
+    if (blocked.length > 0) {
+      throw new BadRequestException(
+        `请先在「插件工具」页完成配置再挂载：${blocked.join('、')}`,
+      );
+    }
+  }
+
+  /** 无必填配置项 → 视为就绪；有必填则每一项都要有非空值 */
+  isSettingsReady(
+    settingsFields: unknown,
+    settings: ToolkitSettings | undefined,
+  ): boolean {
+    const fields = this.parseSettingFields(settingsFields);
+    const required = fields.filter((field) => field.required);
+    if (required.length === 0) return true;
+    const values = settings ?? {};
+    return required.every((field) => Boolean(values[field.key]?.trim()));
+  }
+
+  private parseSettingFields(raw: unknown): SettingField[] {
+    if (!Array.isArray(raw)) return [];
+    return raw.filter(
+      (item): item is SettingField =>
+        !!item &&
+        typeof item === 'object' &&
+        typeof (item as SettingField).key === 'string' &&
+        typeof (item as SettingField).label === 'string',
+    );
   }
 
   /** 合并多个 toolkit 的工具，供 AgentRegistry 构建 Agent 实例 */

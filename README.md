@@ -32,7 +32,7 @@ apps/
 ```bash
 docker compose up -d
 pnpm install
-# 联网搜索 toolkit 需要 Chromium（免费无头浏览器方案）
+# 联网搜索 toolkit：Chromium 本体（Linux 生产机还需系统依赖，见下方生产部署）
 pnpm --filter @agent-next/api exec playwright install chromium
 cp apps/api/.env.example apps/api/.env   # 填入 DEEPSEEK_API_KEY
 pnpm db:push
@@ -119,7 +119,9 @@ BETTER_AUTH_TRUSTED_ORIGINS=https://agent.example.com
 
 ```bash
 pnpm install
-pnpm --filter @agent-next/api exec playwright install chromium   # 联网搜索 toolkit
+# 联网搜索：下载 Chromium；Linux 还需系统库（缺 libatk 等会启动失败）
+pnpm --filter @agent-next/api exec playwright install chromium
+sudo pnpm --filter @agent-next/api exec playwright install-deps chromium
 pnpm db:generate          # 必须先于 build
 pnpm db:push
 pnpm build
@@ -128,6 +130,8 @@ pm2 save
 pm2 startup
 pm2 status                # api / web 都 online
 ```
+
+若联网搜索报 `libatk-1.0.so.0: cannot open shared object file`，说明只装了浏览器、没装系统依赖，在项目根目录重新执行上面的 `install-deps`，然后 `pm2 restart agent-next-api`。
 
 先本机验证：`http://服务器IP:5180` 能打开再去配 NPM。
 

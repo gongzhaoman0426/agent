@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { z } from 'zod';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { ToolkitService } from '../toolkit/toolkit.service.js';
 import { collectWithAncestors } from './agent-ancestors.js';
 import { AgentRegistryService } from './agent-registry.service.js';
 import {
@@ -30,6 +31,7 @@ export class AgentService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly registry: AgentRegistryService,
+    private readonly toolkitService: ToolkitService,
   ) {}
 
   async findAll(userId: string) {
@@ -115,6 +117,12 @@ export class AgentService {
   ) {
     if (dto.subAgentIds !== undefined) {
       await this.validateSubAgents(agentId, dto.subAgentIds, userId);
+    }
+    if (dto.toolkitIds !== undefined) {
+      await this.toolkitService.assertToolkitsConfigured(
+        userId,
+        dto.toolkitIds,
+      );
     }
 
     await this.prisma.$transaction(async (tx) => {

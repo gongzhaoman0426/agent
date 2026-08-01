@@ -8,8 +8,8 @@ export class ToolkitController {
   constructor(private readonly toolkitService: ToolkitService) {}
 
   @Get()
-  list() {
-    return this.toolkitService.list();
+  list(@CurrentUser() user: CurrentUserPayload) {
+    return this.toolkitService.listForUser(user.userId);
   }
 
   @Get(':id/settings')

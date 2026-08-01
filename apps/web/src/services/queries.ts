@@ -123,10 +123,13 @@ export function useUpdateToolkitSettings() {
       toolkitId: string;
       settings: Record<string, string>;
     }) => api.put(`/toolkits/${toolkitId}/settings`, settings),
-    onSuccess: (_data, variables) =>
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.toolkitSettings(variables.toolkitId),
-      }),
+      });
+      // settingsReady 挂在 toolkits 列表上，配置变更后需刷新
+      queryClient.invalidateQueries({ queryKey: queryKeys.toolkits });
+    },
   });
 }
 

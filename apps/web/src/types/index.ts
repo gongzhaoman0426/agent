@@ -53,6 +53,8 @@ export interface Toolkit {
   name: string;
   description: string;
   settingsFields?: SettingField[] | null;
+  /** 必填 settings 是否已配齐；无必填项时恒为 true */
+  settingsReady?: boolean;
   tools: Tool[];
 }
 
