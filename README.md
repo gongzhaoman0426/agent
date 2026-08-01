@@ -84,7 +84,7 @@ your-skill.zip
 ## 扩展
 
 - **工具包**：在 `apps/api/src/toolkit/toolkits/` 新增并注册 Provider
-- **工作流**：在 `apps/api/src/workflow/workflows/` 用 `createWorkflow` 定义，启动时自动同步到数据库
+- **工作流**：在 `apps/api/src/workflow/workflows/` 用 `createWorkflow` 定义，启动时自动同步到数据库（内置：时间查询、晨间简报、调研摘要、待办催办）
 
 ## 生产部署（PM2 + Nginx Proxy Manager）
 

@@ -32,7 +32,7 @@ const getTimeStep = createStep({
 });
 
 export const timeQueryWorkflow = createWorkflow({
-  id: 'time-query-workflow',
+  id: 'time-query',
   description: '查询指定时区的当前时间。需要获取真实当前时间时调用。',
   inputSchema,
   outputSchema,
@@ -43,9 +43,9 @@ export const timeQueryWorkflow = createWorkflow({
 /**
  * 从旧项目 time-query-workflow-01（JSON DSL + 事件链）移植而来，
  * 现为 Mastra 原生代码工作流，挂载到 Agent 后自动成为
- * `workflow-time-query-workflow` 工具。
+ * `workflow-time-query` 工具。
  */
-@workflowId('time-query-workflow')
+@workflowId('time-query')
 export class TimeQueryWorkflow implements WorkflowProvider {
   readonly name = '时间查询工作流';
   readonly description = '查询指定时区的当前时间。需要获取真实当前时间时调用。';

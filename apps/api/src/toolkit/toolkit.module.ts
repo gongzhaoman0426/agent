@@ -19,6 +19,6 @@ import { WebSearchBrowserService } from './web-search/web-search-browser.service
     WebSearchBrowserService,
     WebSearchToolkit,
   ],
-  exports: [ToolkitService, ToolkitDiscoveryService],
+  exports: [ToolkitService, ToolkitDiscoveryService, WebSearchBrowserService],
 })
 export class ToolkitModule {}
