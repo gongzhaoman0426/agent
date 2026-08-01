@@ -84,6 +84,105 @@ your-skill.zip
 - **工具包**：在 `apps/api/src/toolkit/toolkits/` 新增并注册 Provider
 - **工作流**：在 `apps/api/src/workflow/workflows/` 用 `createWorkflow` 定义，启动时自动同步到数据库
 
+## 生产部署（PM2）
+
+API 用 PM2 守护；前端构建为静态文件，由 Nginx 托管，并把 `/api` 反代到 API。
+
+### 1. 准备服务器
+
+```bash
+# Node.js ≥ 22.13、pnpm、pm2、Docker（或自备 PostgreSQL）
+npm i -g pnpm pm2
+```
+
+### 2. 拉代码并配置
+
+```bash
+git clone https://github.com/gongzhaoman0426/agent.git
+cd agent
+
+docker compose up -d                  # PostgreSQL（端口 5434）
+cp apps/api/.env.example apps/api/.env
+# 编辑 .env：DEEPSEEK_API_KEY、BETTER_AUTH_SECRET
+# 生产务必改：
+#   BETTER_AUTH_URL=https://你的域名
+#   BETTER_AUTH_TRUSTED_ORIGINS=https://你的域名
+```
+
+### 3. 安装、建表、构建
+
+```bash
+pnpm install
+pnpm db:generate
+pnpm db:push
+pnpm build                            # 同时构建 api + web
+```
+
+- API 产物：`apps/api/dist/main.js`
+- 前端产物：`apps/web/dist/`
+
+### 4. 用 PM2 启动 API
+
+仓库根目录已有 `ecosystem.config.cjs`：
+
+```bash
+pm2 start ecosystem.config.cjs
+pm2 save
+pm2 startup                           # 按提示配置开机自启
+```
+
+常用命令：
+
+```bash
+pm2 status
+pm2 logs agent-next-api
+pm2 restart agent-next-api
+pm2 stop agent-next-api
+```
+
+更新发布：
+
+```bash
+git pull
+pnpm install
+pnpm db:generate
+pnpm db:push                          # schema 有变更时
+pnpm build
+pm2 restart agent-next-api
+```
+
+### 5. Nginx 示例
+
+把前端静态目录指到 `apps/web/dist`，`/api` 反代到本机 `3003`（与 `.env` 里 `PORT` 一致）：
+
+```nginx
+server {
+    listen 80;
+    server_name your.domain.com;
+
+    root /path/to/agent/apps/web/dist;
+    index index.html;
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:3003;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # 聊天 / 技能助手为 SSE 长连接
+        proxy_buffering off;
+        proxy_read_timeout 3600s;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+HTTPS 可用 certbot 等另行配置。技能文件落在 `apps/api/data/skills/`，部署与备份时保留该目录。
+
 ## 常用命令
 
 ```bash
@@ -93,4 +192,5 @@ pnpm db:push          # 同步 Prisma schema
 pnpm db:generate      # 生成 Prisma Client
 pnpm typecheck        # 全仓类型检查
 pnpm build            # 构建
+pm2 start ecosystem.config.cjs   # 生产启动 API
 ```
