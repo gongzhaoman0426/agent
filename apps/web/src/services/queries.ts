@@ -13,6 +13,7 @@ import type {
   SkillFileContent,
   SkillFileNode,
   SkillSummary,
+  McpServer,
   Toolkit,
   UiMessage,
   WechatAccount,
@@ -24,6 +25,7 @@ import type {
 export const queryKeys = {
   agents: ['agents'] as const,
   toolkits: ['toolkits'] as const,
+  mcpServers: ['mcp-servers'] as const,
   workflows: ['workflows'] as const,
   skills: ['skills'] as const,
   sessions: ['sessions'] as const,
@@ -129,6 +131,50 @@ export function useUpdateToolkitSettings() {
       });
       // settingsReady 挂在 toolkits 列表上，配置变更后需刷新
       queryClient.invalidateQueries({ queryKey: queryKeys.toolkits });
+    },
+  });
+}
+
+// ---- Minimal HTTP MCP ----
+
+export function useMcpServers() {
+  return useQuery({
+    queryKey: queryKeys.mcpServers,
+    queryFn: () => api.get<McpServer[]>('/mcp-servers'),
+  });
+}
+
+export function useCreateMcpServer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (data: { name: string; url: string }) =>
+      api.post<McpServer>('/mcp-servers', data),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.toolkits });
+    },
+  });
+}
+
+export function useRefreshMcpServer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) =>
+      api.post<McpServer>(`/mcp-servers/${id}/refresh`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.toolkits });
+    },
+  });
+}
+
+export function useDeleteMcpServer() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/mcp-servers/${id}`),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.mcpServers });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.toolkits });
     },
   });
 }

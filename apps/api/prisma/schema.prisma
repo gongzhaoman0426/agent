@@ -20,6 +20,7 @@ model User {
   accounts            Account[]
   sessions            Session[]
   userToolkitSettings UserToolkitSettings[]
+  userMcpServers      UserMcpServer[]
   skills              Skill[]
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
@@ -230,6 +231,28 @@ model UserToolkitSettings {
 
   @@unique([userId, toolkitId])
   @@map("user_toolkit_settings")
+}
+
+// ============ 用户级 Minimal HTTP MCP（POST /mcp JSON-RPC） ============
+
+model UserMcpServer {
+  id         String    @id @default(cuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  /** 展示名，用于生成工具前缀 slug */
+  name       String
+  /** 完整 MCP 端点，如 http://127.0.0.1:9000/mcp */
+  url        String
+  /** 对应 toolkits.id，形如 mcp_<cuid> */
+  toolkitId  String    @unique
+  toolCount  Int       @default(0)
+  lastSyncAt DateTime?
+  lastError  String?
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("user_mcp_servers")
 }
 
 // ============ 定时任务（到期后模拟用户对 Agent 说一句话） ============

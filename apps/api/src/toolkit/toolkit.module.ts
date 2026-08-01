@@ -1,5 +1,6 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { DiscoveryModule } from '@nestjs/core';
+import { McpModule } from '../mcp/mcp.module.js';
 import { ToolkitDiscoveryService } from './toolkit-discovery.service.js';
 import { ToolkitService } from './toolkit.service.js';
 import { ToolkitController } from './toolkit.controller.js';
@@ -9,7 +10,7 @@ import { WebSearchToolkit } from './toolkits/web-search.toolkit.js';
 import { WebSearchBrowserService } from './web-search/web-search-browser.service.js';
 
 @Module({
-  imports: [DiscoveryModule],
+  imports: [DiscoveryModule, forwardRef(() => McpModule)],
   controllers: [ToolkitController],
   providers: [
     ToolkitDiscoveryService,

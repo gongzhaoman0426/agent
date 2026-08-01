@@ -102,10 +102,14 @@ export class ToolkitDiscoveryService implements OnModuleInit {
       });
     }
 
-    // 软删除代码中已不存在的 toolkit
+    // 软删除代码中已不存在的 toolkit；保留用户 MCP（id 以 mcp_ 开头）
     const codeIds = [...this.registry.keys()];
     const obsolete = await this.prisma.toolkit.updateMany({
-      where: { id: { notIn: codeIds }, deleted: false },
+      where: {
+        id: { notIn: codeIds },
+        deleted: false,
+        NOT: { id: { startsWith: 'mcp_' } },
+      },
       data: { deleted: true },
     });
     if (obsolete.count > 0) {

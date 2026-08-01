@@ -8,6 +8,7 @@ import type {
 } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { MastraService } from '../mastra/mastra.service.js';
+import { McpServerService } from '../mcp/mcp-server.service.js';
 import { ToolkitService } from '../toolkit/toolkit.service.js';
 import { WorkflowService } from '../workflow/workflow.service.js';
 import { SkillService } from '../skill/skill.service.js';
@@ -47,6 +48,7 @@ export class AgentRegistryService {
     private readonly prisma: PrismaService,
     private readonly mastraService: MastraService,
     private readonly toolkitService: ToolkitService,
+    private readonly mcpServers: McpServerService,
     private readonly workflowService: WorkflowService,
     private readonly skillService: SkillService,
   ) {}
@@ -88,7 +90,14 @@ export class AgentRegistryService {
       toolkitIds.push(SKILL_TOOLKIT_ID);
     }
 
-    const tools = this.toolkitService.getToolsInput(toolkitIds);
+    const codeTools = this.toolkitService.getToolsInput(toolkitIds);
+    const mcpTools = agent.createdById
+      ? await this.mcpServers.getToolsInputForAgent(
+          agent.createdById,
+          toolkitIds,
+        )
+      : {};
+    const tools = { ...codeTools, ...mcpTools };
     const workflows = this.workflowService.getWorkflowsInput(workflowIds);
     const subAgents = await this.buildSubAgents(agent.id, visited);
 

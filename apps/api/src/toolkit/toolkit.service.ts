@@ -1,10 +1,13 @@
 import {
   BadRequestException,
+  Inject,
   Injectable,
   NotFoundException,
+  forwardRef,
 } from '@nestjs/common';
 import type { ToolsInput } from '@mastra/core/agent';
 import type { Prisma } from '@prisma/client';
+import { McpServerService } from '../mcp/mcp-server.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ToolkitDiscoveryService } from './toolkit-discovery.service.js';
 import type {
@@ -18,6 +21,8 @@ export class ToolkitService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly discovery: ToolkitDiscoveryService,
+    @Inject(forwardRef(() => McpServerService))
+    private readonly mcpServers: McpServerService,
   ) {}
 
   async list() {
@@ -28,37 +33,65 @@ export class ToolkitService {
     });
   }
 
-  /** 列表附带当前用户是否已配齐必填 settings，供前端禁用未配置挂载 */
+  /**
+   * 列表附带 settingsReady；代码 Toolkit 全员可见，
+   * mcp_* 仅当前用户自己的连接可见。
+   */
   async listForUser(userId: string) {
-    const [toolkits, settingsMap] = await Promise.all([
+    const [toolkits, settingsMap, ownedMcpIds, mcpReady] = await Promise.all([
       this.list(),
       this.getSettingsMap(userId),
+      this.mcpServers.listOwnedToolkitIds(userId),
+      this.mcpServers.getReadyMap(userId),
     ]);
-    return toolkits.map((toolkit) => ({
-      ...toolkit,
-      settingsReady: this.isSettingsReady(
-        toolkit.settingsFields,
-        settingsMap[toolkit.id] as ToolkitSettings | undefined,
-      ),
-    }));
+
+    return toolkits
+      .filter((toolkit) => {
+        if (!toolkit.id.startsWith('mcp_')) return true;
+        return ownedMcpIds.has(toolkit.id);
+      })
+      .map((toolkit) => {
+        if (toolkit.id.startsWith('mcp_')) {
+          const state = mcpReady[toolkit.id];
+          return {
+            ...toolkit,
+            settingsReady: state?.ready ?? false,
+            source: 'mcp' as const,
+            mcpError: state?.lastError ?? null,
+          };
+        }
+        return {
+          ...toolkit,
+          settingsReady: this.isSettingsReady(
+            toolkit.settingsFields,
+            settingsMap[toolkit.id] as ToolkitSettings | undefined,
+          ),
+          source: 'code' as const,
+          mcpError: null as string | null,
+        };
+      });
   }
 
   /**
-   * 挂载前校验：声明了必填 settings 的 toolkit，用户必须先配齐，
-   * 否则拒绝挂到 Agent 上。
+   * 挂载前校验：必填 settings 须配齐；mcp_* 须属当前用户且同步成功。
    */
   async assertToolkitsConfigured(userId: string, toolkitIds: string[]) {
     if (toolkitIds.length === 0) return;
 
+    await this.mcpServers.assertMcpToolkitsReady(userId, toolkitIds);
+
+    const nonMcpIds = toolkitIds.filter((id) => !id.startsWith('mcp_'));
+    if (nonMcpIds.length === 0) return;
+
     const toolkits = await this.prisma.toolkit.findMany({
-      where: { id: { in: toolkitIds }, deleted: false },
+      where: { id: { in: nonMcpIds }, deleted: false },
       select: { id: true, name: true, settingsFields: true },
     });
     const byId = new Map(toolkits.map((item) => [item.id, item]));
     const settingsMap = await this.getSettingsMap(userId);
     const blocked: string[] = [];
 
-    for (const toolkitId of toolkitIds) {
+    for (const toolkitId of nonMcpIds) {
       const toolkit = byId.get(toolkitId);
       if (!toolkit) {
         throw new BadRequestException(`工具包不存在: ${toolkitId}`);

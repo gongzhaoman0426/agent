@@ -55,7 +55,24 @@ export interface Toolkit {
   settingsFields?: SettingField[] | null;
   /** 必填 settings 是否已配齐；无必填项时恒为 true */
   settingsReady?: boolean;
+  /** code = 内置；mcp = 用户远程 Minimal MCP */
+  source?: 'code' | 'mcp';
+  mcpError?: string | null;
   tools: Tool[];
+}
+
+export interface McpServer {
+  id: string;
+  name: string;
+  url: string;
+  toolkitId: string;
+  toolCount: number;
+  lastSyncAt?: string | null;
+  lastError?: string | null;
+  ready: boolean;
+  tools: Array<{ id: string; name: string; description: string }>;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface Workflow {

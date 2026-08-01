@@ -9,6 +9,7 @@ import { SkillModule } from './skill/skill.module.js';
 import { AgentModule } from './agent/agent.module.js';
 import { ScheduleModule } from './schedule/schedule.module.js';
 import { WechatModule } from './wechat/wechat.module.js';
+import { McpModule } from './mcp/mcp.module.js';
 import { HealthController } from './health.controller.js';
 
 @Module({
@@ -18,6 +19,7 @@ import { HealthController } from './health.controller.js';
     AuthModule,
     MastraModule,
     ToolkitModule,
+    McpModule,
     WorkflowModule,
     SkillModule,
     AgentModule,

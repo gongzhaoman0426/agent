@@ -542,17 +542,16 @@ function OrchestratePage() {
       (toolkits ?? [])
         .filter((toolkit) => toolkit.id !== SKILL_TOOLKIT_ID)
         .map((toolkit) => {
-          const needsSettings = (toolkit.settingsFields ?? []).some(
-            (field) => field.required,
-          );
-          const blocked = needsSettings && toolkit.settingsReady !== true;
+          const blocked = toolkit.settingsReady === false;
           return {
             id: toolkit.id,
             label: toolkit.name,
             description: toolkit.description,
             disabled: blocked,
             disabledReason: blocked
-              ? '请先在「插件工具」页完成必填配置'
+              ? toolkit.source === 'mcp'
+                ? '请先在「插件工具」刷新该 MCP 连接'
+                : '请先在「插件工具」页完成必填配置'
               : undefined,
           };
         }),
