@@ -4,6 +4,7 @@ import {
   Logger,
   NotFoundException,
 } from '@nestjs/common';
+import type { MastraDBMessage } from '@mastra/core/agent';
 import { RequestContext } from '@mastra/core/request-context';
 import type { Agent, AgentSkill, AgentToolkit, AgentWorkflow } from '@prisma/client';
 import {
@@ -54,6 +55,7 @@ export class ChatService {
       userId,
       agent.id,
       threadId,
+      dto.channel,
     );
 
     const stream = await instance.stream(dto.message, {
@@ -96,12 +98,22 @@ export class ChatService {
     }
   }
 
-  /** 非流式对话（API 场景） */
-  async chat(agent: AgentWithMounts, dto: ChatDto, userId: string) {
+  /**
+   * 非流式对话（API / 定时任务触发）。
+   * @param options.hideUserMessage 为 true 时：仍用会话历史作上下文，但不落库用户消息，
+   *   只把本轮 Assistant 回复写入 session（定时任务到期指令不应出现在会话里）。
+   */
+  async chat(
+    agent: AgentWithMounts,
+    dto: ChatDto,
+    userId: string,
+    options?: { threadTitle?: string; hideUserMessage?: boolean },
+  ) {
     const { threadId, resourceId } = await this.ensureThread(
       dto.sessionId,
       userId,
       agent,
+      options?.threadTitle,
     );
 
     const instance = await this.registry.getInstance(agent);
@@ -109,12 +121,22 @@ export class ChatService {
       userId,
       agent.id,
       threadId,
+      dto.channel,
     );
 
+    const hideUserMessage = options?.hideUserMessage === true;
     const result = await instance.generate(dto.message, {
-      memory: { thread: threadId, resource: resourceId },
+      memory: {
+        thread: threadId,
+        resource: resourceId,
+        ...(hideUserMessage ? { options: { readOnly: true } } : {}),
+      },
       requestContext,
     });
+
+    if (hideUserMessage) {
+      await this.persistAssistantOnly(result, threadId, resourceId);
+    }
 
     return {
       agentId: agent.id,
@@ -124,6 +146,55 @@ export class ChatService {
       response: result.text,
       timestamp: new Date().toISOString(),
     };
+  }
+
+  /** 定时任务等场景：只把本轮 assistant 消息写入线程 */
+  private async persistAssistantOnly(
+    result: {
+      text: string;
+      messages?: MastraDBMessage[];
+      rememberedMessages?: MastraDBMessage[];
+    },
+    threadId: string,
+    resourceId: string,
+  ) {
+    const rememberedIds = new Set(
+      (result.rememberedMessages ?? []).map((message) => message.id),
+    );
+    const fromResult = (result.messages ?? [])
+      .filter(
+        (message) =>
+          message.role === 'assistant' && !rememberedIds.has(message.id),
+      )
+      .map(
+        (message): MastraDBMessage => ({
+          ...message,
+          threadId,
+          resourceId,
+          createdAt: message.createdAt ?? new Date(),
+        }),
+      );
+
+    if (fromResult.length > 0) {
+      await this.mastraService.memory.saveMessages({ messages: fromResult });
+      return;
+    }
+
+    const text = result.text?.trim();
+    if (!text) return;
+
+    const fallback: MastraDBMessage = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      createdAt: new Date(),
+      threadId,
+      resourceId,
+      content: {
+        format: 2,
+        parts: [{ type: 'text', text }],
+      },
+    };
+    await this.mastraService.memory.saveMessages({ messages: [fallback] });
   }
 
   // ============ 会话管理（Mastra Memory 存储） ============
@@ -166,6 +237,7 @@ export class ChatService {
     sessionId: string,
     userId: string,
     agent: AgentWithMounts,
+    threadTitle?: string,
   ) {
     const resourceId = `${userId}:${agent.id}`;
     const existing = await this.mastraService.memory
@@ -183,9 +255,10 @@ export class ChatService {
     await this.mastraService.memory.createThread({
       threadId: sessionId,
       resourceId,
+      title: threadTitle,
       metadata: { userId, agentId: agent.id, agentName: agent.name },
     });
-    return { threadId: sessionId, resourceId, hasTitle: false };
+    return { threadId: sessionId, resourceId, hasTitle: Boolean(threadTitle) };
   }
 
   private async requireOwnedThread(sessionId: string, userId: string) {
@@ -206,11 +279,13 @@ export class ChatService {
     userId: string,
     agentId: string,
     sessionId: string,
+    channel: string = 'web',
   ) {
     const requestContext = new RequestContext();
     requestContext.set(REQUEST_CONTEXT_KEYS.userId, userId);
     requestContext.set(REQUEST_CONTEXT_KEYS.agentId, agentId);
     requestContext.set(REQUEST_CONTEXT_KEYS.sessionId, sessionId);
+    requestContext.set(REQUEST_CONTEXT_KEYS.channel, channel);
     requestContext.set(
       REQUEST_CONTEXT_KEYS.toolkitSettings,
       await this.toolkitService.getSettingsMap(userId),

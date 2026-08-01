@@ -122,3 +122,20 @@ export interface UiMessage {
 export interface SessionDetail extends ChatSession {
   messages: UiMessage[];
 }
+
+/** 定时任务（Web inbox / 工具返回结构） */
+export interface ScheduledTask {
+  id: string;
+  agentId: string;
+  message: string;
+  channel: string;
+  sessionId: string;
+  runAt: string;
+  status: string;
+  resultText?: string | null;
+  errorMessage?: string | null;
+  deliveredAt?: string | null;
+  startedAt?: string | null;
+  finishedAt?: string | null;
+  createdAt: string;
+}

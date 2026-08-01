@@ -37,9 +37,18 @@ export const REQUEST_CONTEXT_KEYS = {
   userId: 'userId',
   agentId: 'agentId',
   sessionId: 'sessionId',
+  /**
+   * 对话来源渠道（web / wechat …）。
+   * 定时任务创建时会写入任务，到期结果回传到同一渠道。
+   */
+  channel: 'channel',
   /** Record<toolkitId, ToolkitSettings> */
   toolkitSettings: 'toolkitSettings',
 } as const;
+
+/** 已支持的对话 / 回传渠道 */
+export const SCHEDULE_CHANNELS = ['web', 'wechat'] as const;
+export type ScheduleChannel = (typeof SCHEDULE_CHANNELS)[number];
 
 /**
  * 工具执行时读取当前用户的工具包配置。

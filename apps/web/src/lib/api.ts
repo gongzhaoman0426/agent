@@ -107,13 +107,13 @@ export interface StreamCallbacks {
 
 export function streamChat(
   agentId: string,
-  payload: { message: string; sessionId: string },
+  payload: { message: string; sessionId: string; channel?: 'web' | 'wechat' },
   callbacks: StreamCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
   return streamSse(
     `/agents/${agentId}/chat/stream`,
-    payload,
+    { channel: 'web', ...payload },
     callbacks,
     signal,
   );

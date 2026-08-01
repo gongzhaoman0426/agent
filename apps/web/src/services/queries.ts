@@ -7,6 +7,7 @@ import { api } from '@/lib/api';
 import type {
   Agent,
   ChatSession,
+  ScheduledTask,
   SessionDetail,
   SkillDetail,
   SkillFileContent,
@@ -29,6 +30,7 @@ export const queryKeys = {
   skillFile: (name: string, path: string) =>
     ['skills', name, 'file', path] as const,
   skillAssistant: (name: string) => ['skills', name, 'assistant'] as const,
+  scheduleInbox: ['schedule', 'inbox'] as const,
 };
 
 // ---- Agents ----
@@ -319,5 +321,26 @@ export function useDeleteSession() {
       api.delete(`/agents/sessions/detail/${sessionId}`),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.sessions }),
+  });
+}
+
+// ---- Schedule inbox（Web 渠道回传） ----
+
+export function useScheduleInbox(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.scheduleInbox,
+    queryFn: () => api.get<ScheduledTask[]>('/schedule/inbox'),
+    enabled,
+    refetchInterval: 8_000,
+  });
+}
+
+export function useAckScheduleInbox() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (taskIds: string[]) =>
+      api.post<{ acked: number }>('/schedule/inbox/ack', { taskIds }),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.scheduleInbox }),
   });
 }

@@ -33,6 +33,8 @@ export const updateAgentSchema = z.object({
 export const chatSchema = z.object({
   message: z.string().min(1, '消息不能为空'),
   sessionId: z.string().min(1, '会话 ID 不能为空'),
+  /** 对话渠道，默认 web；定时任务结果会回传到创建时的渠道 */
+  channel: z.enum(['web', 'wechat']).default('web'),
 });
 
 export type CreateAgentDto = z.infer<typeof createAgentSchema>;

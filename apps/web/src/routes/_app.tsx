@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { Outlet, createFileRoute, redirect } from '@tanstack/react-router';
 import { getStoredUser, refreshStoredUser } from '@/lib/auth';
+import { ScheduleInboxToaster } from '@/components/schedule-inbox';
 import { Sidebar } from '@/components/sidebar';
 
 export const Route = createFileRoute('/_app')({
@@ -24,6 +25,7 @@ function AppLayout() {
       <main className="min-w-0 flex-1">
         <Outlet />
       </main>
+      <ScheduleInboxToaster />
     </div>
   );
 }

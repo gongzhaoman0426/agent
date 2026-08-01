@@ -231,3 +231,35 @@ model UserToolkitSettings {
   @@unique([userId, toolkitId])
   @@map("user_toolkit_settings")
 }
+
+// ============ 定时任务（到期后模拟用户对 Agent 说一句话） ============
+
+model ScheduledTask {
+  id          String    @id @default(cuid())
+  userId      String
+  agentId     String
+  /** 到期时发给 Agent 的用户消息 */
+  message     String
+  /** 创建渠道：web / wechat …；结果回传同一渠道 */
+  channel     String
+  /** 渠道附加信息（如未来微信 openId），可选 */
+  channelMeta Json?
+  /** 该用户+Agent 固定复用的定时任务会话 ID */
+  sessionId   String
+  runAt       DateTime
+  /** pending | running | completed | failed | cancelled */
+  status      String    @default("pending")
+  resultText  String?
+  errorMessage String?
+  /** 渠道侧已消费结果的时间；web 由前端 ack */
+  deliveredAt DateTime?
+  startedAt   DateTime?
+  finishedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, runAt])
+  @@index([userId, status, deliveredAt])
+  @@index([userId, agentId, status])
+  @@map("scheduled_tasks")
+}

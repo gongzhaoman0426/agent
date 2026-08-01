@@ -14,6 +14,7 @@ import {
   Workflow as WorkflowIcon,
   X,
 } from 'lucide-react';
+import { useScheduleSessionSync } from '@/hooks/use-schedule-session-sync';
 import { streamChat } from '@/lib/api';
 import { isSubmitEnter } from '@/lib/keyboard';
 import { cn, generateUUID } from '@/lib/utils';
@@ -244,6 +245,11 @@ function DebugPanel({
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, thinking]);
+
+  useScheduleSessionSync(sessionId, {
+    streaming,
+    onMessages: setMessages,
+  });
 
   const appendAssistantPart = (part: MessagePart) => {
     setThinking(false);

@@ -11,5 +11,6 @@ import { ChatService } from './chat.service.js';
   imports: [ToolkitModule, WorkflowModule, SkillModule],
   controllers: [AgentController],
   providers: [AgentService, AgentRegistryService, ChatService],
+  exports: [AgentService, ChatService],
 })
 export class AgentModule {}

@@ -10,6 +10,7 @@ import {
   Square,
   Trash2,
 } from 'lucide-react';
+import { useScheduleSessionSync } from '@/hooks/use-schedule-session-sync';
 import { streamChat } from '@/lib/api';
 import { isSubmitEnter } from '@/lib/keyboard';
 import { cn, generateUUID } from '@/lib/utils';
@@ -179,6 +180,12 @@ function ChatPage() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, thinking]);
+
+  // 定时任务写回当前会话时，刷入用户句 + Agent 回复
+  useScheduleSessionSync(sessionParam, {
+    streaming,
+    onMessages: setMessages,
+  });
 
   const appendAssistantPart = (part: MessagePart) => {
     setThinking(false);
