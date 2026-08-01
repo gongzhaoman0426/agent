@@ -8,7 +8,7 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 
 /**
  * 全局唯一的 Mastra 基础设施：
- * - Memory：会话历史（lastMessages）；可选跨会话语义召回（semanticRecall + embedder + pgvector）
+ * - Memory：会话历史（lastMessages）；可选 Observational Memory / 语义召回
  * - 存储/向量表由 Mastra 自动建表管理，业务表走 Prisma
  */
 type ModelRouterId = `${string}/${string}`;
@@ -129,6 +129,16 @@ export class MastraService {
       (configService.get<string>('MASTRA_SEMANTIC_RECALL') ?? 'false') ===
       'true';
 
+    /**
+     * Observational Memory：历史超阈值后由后台 Observer/Reflector 压缩为观察日志。
+     * 不能用 observationalMemory: true（默认 Gemini）；显式指定模型。
+     */
+    const observationalMemory =
+      (configService.get<string>('MASTRA_OBSERVATIONAL_MEMORY') ?? 'true') ===
+      'true';
+    const omModel =
+      configService.get<string>('MASTRA_OM_MODEL') || DEFAULT_MODEL;
+
     // 标题生成在收尾阶段异步进行，不阻塞回复，默认与主模型一致
     const titleModel =
       configService.get<string>('MASTRA_TITLE_MODEL') || DEFAULT_MODEL;
@@ -159,6 +169,15 @@ export class MastraService {
         semanticRecall: semanticRecall
           ? { topK: 4, messageRange: 2, scope: 'resource' }
           : false,
+        ...(observationalMemory
+          ? {
+              observationalMemory: {
+                model: this.resolveModel(omModel),
+                // DeepSeek 等文本模型不吃附件，避免 Observer 因多模态输入失败
+                observation: { observeAttachments: false },
+              },
+            }
+          : {}),
         generateTitle: {
           model: this.resolveModel(titleModel),
           instructions:

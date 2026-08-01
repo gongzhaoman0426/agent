@@ -23,7 +23,7 @@ apps/
 | Toolkit | 代码注册的工具包，支持用户级 settings |
 | Workflow | Mastra `createWorkflow`，挂载后暴露为 `workflow-<id>` 工具 |
 | Skill | 用户上传技能包，挂载后按需 `use_skill` 激活 |
-| Memory | Mastra Memory，默认保留最近消息；可选语义召回 |
+| Memory | Mastra Memory：最近消息 + Observational Memory；可选语义召回 |
 
 ## 快速开始
 
@@ -53,6 +53,8 @@ pnpm dev:web
 | `DEEPSEEK_API_KEY` | DeepSeek 官方 API Key |
 | `MASTRA_DEFAULT_MODEL` | 默认对话模型，默认 `deepseek/deepseek-v4-flash` |
 | `MASTRA_TITLE_MODEL` | 会话标题模型，默认同主模型 |
+| `MASTRA_OBSERVATIONAL_MEMORY` | 长对话观察压缩，默认 `true` |
+| `MASTRA_OM_MODEL` | Observer/Reflector 模型，默认同主模型 |
 | `MASTRA_SEMANTIC_RECALL` | 跨会话语义召回，默认 `false`；开启时还需配置 embedding |
 | `BETTER_AUTH_SECRET` | 认证密钥 |
 | `BETTER_AUTH_URL` | 认证服务地址 |
