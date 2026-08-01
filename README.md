@@ -32,6 +32,8 @@ apps/
 ```bash
 docker compose up -d
 pnpm install
+# 联网搜索 toolkit 需要 Chromium（免费无头浏览器方案）
+pnpm --filter @agent-next/api exec playwright install chromium
 cp apps/api/.env.example apps/api/.env   # 填入 DEEPSEEK_API_KEY
 pnpm db:push
 pnpm dev:api
@@ -117,6 +119,7 @@ BETTER_AUTH_TRUSTED_ORIGINS=https://agent.example.com
 
 ```bash
 pnpm install
+pnpm --filter @agent-next/api exec playwright install chromium   # 联网搜索 toolkit
 pnpm db:generate          # 必须先于 build
 pnpm db:push
 pnpm build

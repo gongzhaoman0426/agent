@@ -5,6 +5,8 @@ import { ToolkitService } from './toolkit.service.js';
 import { ToolkitController } from './toolkit.controller.js';
 import { CommonToolkit } from './toolkits/common.toolkit.js';
 import { HomeAssistantToolkit } from './toolkits/home-assistant.toolkit.js';
+import { WebSearchToolkit } from './toolkits/web-search.toolkit.js';
+import { WebSearchBrowserService } from './web-search/web-search-browser.service.js';
 
 @Module({
   imports: [DiscoveryModule],
@@ -14,6 +16,8 @@ import { HomeAssistantToolkit } from './toolkits/home-assistant.toolkit.js';
     ToolkitService,
     CommonToolkit,
     HomeAssistantToolkit,
+    WebSearchBrowserService,
+    WebSearchToolkit,
   ],
   exports: [ToolkitService, ToolkitDiscoveryService],
 })
