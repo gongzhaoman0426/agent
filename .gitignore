@@ -4,5 +4,8 @@ dist/
 *.tsbuildinfo
 .DS_Store
 
+# 本地技能包草稿（上传到平台前的源文件）
+skills/
+
 # 用户上传的技能包存储
 apps/api/data/
