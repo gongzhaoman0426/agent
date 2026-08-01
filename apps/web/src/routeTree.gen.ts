@@ -17,6 +17,7 @@ import { Route as AppAgentsAgentIdRouteImport } from './routes/_app/agents.$agen
 import { Route as AppManageAgentsRouteImport } from './routes/_app/manage.agents'
 import { Route as AppManageSkillsRouteImport } from './routes/_app/manage.skills'
 import { Route as AppManageToolkitsRouteImport } from './routes/_app/manage.toolkits'
+import { Route as AppManageWechatRouteImport } from './routes/_app/manage.wechat'
 import { Route as AppManageWorkflowsRouteImport } from './routes/_app/manage.workflows'
 import { Route as AppSkillsSkillNameRouteImport } from './routes/_app/skills.$skillName'
 
@@ -59,6 +60,11 @@ const AppManageToolkitsRoute = AppManageToolkitsRouteImport.update({
   path: '/manage/toolkits',
   getParentRoute: () => AppRoute,
 } as any)
+const AppManageWechatRoute = AppManageWechatRouteImport.update({
+  id: '/manage/wechat',
+  path: '/manage/wechat',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppManageWorkflowsRoute = AppManageWorkflowsRouteImport.update({
   id: '/manage/workflows',
   path: '/manage/workflows',
@@ -78,6 +84,7 @@ export interface FileRoutesByFullPath {
   '/manage/agents': typeof AppManageAgentsRoute
   '/manage/skills': typeof AppManageSkillsRoute
   '/manage/toolkits': typeof AppManageToolkitsRoute
+  '/manage/wechat': typeof AppManageWechatRoute
   '/manage/workflows': typeof AppManageWorkflowsRoute
   '/skills/$skillName': typeof AppSkillsSkillNameRoute
 }
@@ -89,6 +96,7 @@ export interface FileRoutesByTo {
   '/manage/agents': typeof AppManageAgentsRoute
   '/manage/skills': typeof AppManageSkillsRoute
   '/manage/toolkits': typeof AppManageToolkitsRoute
+  '/manage/wechat': typeof AppManageWechatRoute
   '/manage/workflows': typeof AppManageWorkflowsRoute
   '/skills/$skillName': typeof AppSkillsSkillNameRoute
 }
@@ -102,6 +110,7 @@ export interface FileRoutesById {
   '/_app/manage/agents': typeof AppManageAgentsRoute
   '/_app/manage/skills': typeof AppManageSkillsRoute
   '/_app/manage/toolkits': typeof AppManageToolkitsRoute
+  '/_app/manage/wechat': typeof AppManageWechatRoute
   '/_app/manage/workflows': typeof AppManageWorkflowsRoute
   '/_app/skills/$skillName': typeof AppSkillsSkillNameRoute
 }
@@ -115,6 +124,7 @@ export interface FileRouteTypes {
     | '/manage/agents'
     | '/manage/skills'
     | '/manage/toolkits'
+    | '/manage/wechat'
     | '/manage/workflows'
     | '/skills/$skillName'
   fileRoutesByTo: FileRoutesByTo
@@ -126,6 +136,7 @@ export interface FileRouteTypes {
     | '/manage/agents'
     | '/manage/skills'
     | '/manage/toolkits'
+    | '/manage/wechat'
     | '/manage/workflows'
     | '/skills/$skillName'
   id:
@@ -138,6 +149,7 @@ export interface FileRouteTypes {
     | '/_app/manage/agents'
     | '/_app/manage/skills'
     | '/_app/manage/toolkits'
+    | '/_app/manage/wechat'
     | '/_app/manage/workflows'
     | '/_app/skills/$skillName'
   fileRoutesById: FileRoutesById
@@ -206,6 +218,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppManageToolkitsRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/manage/wechat': {
+      id: '/_app/manage/wechat'
+      path: '/manage/wechat'
+      fullPath: '/manage/wechat'
+      preLoaderRoute: typeof AppManageWechatRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/manage/workflows': {
       id: '/_app/manage/workflows'
       path: '/manage/workflows'
@@ -229,6 +248,7 @@ interface AppRouteChildren {
   AppManageAgentsRoute: typeof AppManageAgentsRoute
   AppManageSkillsRoute: typeof AppManageSkillsRoute
   AppManageToolkitsRoute: typeof AppManageToolkitsRoute
+  AppManageWechatRoute: typeof AppManageWechatRoute
   AppManageWorkflowsRoute: typeof AppManageWorkflowsRoute
   AppSkillsSkillNameRoute: typeof AppSkillsSkillNameRoute
 }
@@ -239,6 +259,7 @@ const AppRouteChildren: AppRouteChildren = {
   AppManageAgentsRoute: AppManageAgentsRoute,
   AppManageSkillsRoute: AppManageSkillsRoute,
   AppManageToolkitsRoute: AppManageToolkitsRoute,
+  AppManageWechatRoute: AppManageWechatRoute,
   AppManageWorkflowsRoute: AppManageWorkflowsRoute,
   AppSkillsSkillNameRoute: AppSkillsSkillNameRoute,
 }

@@ -8,6 +8,7 @@ import { WorkflowModule } from './workflow/workflow.module.js';
 import { SkillModule } from './skill/skill.module.js';
 import { AgentModule } from './agent/agent.module.js';
 import { ScheduleModule } from './schedule/schedule.module.js';
+import { WechatModule } from './wechat/wechat.module.js';
 import { HealthController } from './health.controller.js';
 
 @Module({
@@ -21,6 +22,7 @@ import { HealthController } from './health.controller.js';
     SkillModule,
     AgentModule,
     ScheduleModule,
+    WechatModule,
   ],
   controllers: [HealthController],
 })

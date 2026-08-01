@@ -123,6 +123,36 @@ export interface SessionDetail extends ChatSession {
   messages: UiMessage[];
 }
 
+export interface WechatAccount {
+  id: string;
+  userId: string;
+  accountId: string;
+  baseUrl: string;
+  defaultAgentId: string;
+  enabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface WechatLoginStart {
+  sessionKey: string;
+  qrcodeUrl?: string;
+  message: string;
+}
+
+export interface WechatLoginStatus {
+  status: string;
+  qrcodeUrl?: string;
+  needVerifyCode?: boolean;
+  connected?: boolean;
+  alreadyConnected?: boolean;
+  botToken?: string;
+  accountId?: string;
+  baseUrl?: string;
+  scannerUserId?: string;
+  message: string;
+}
+
 /** 定时任务（Web inbox / 工具返回结构） */
 export interface ScheduledTask {
   id: string;

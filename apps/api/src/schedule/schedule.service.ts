@@ -193,6 +193,13 @@ export class ScheduleService {
       const agent = await this.agentService.findOwned(task.agentId, task.userId);
       const channel = this.normalizeChannel(task.channel);
 
+      const channelMeta =
+        task.channelMeta &&
+        typeof task.channelMeta === 'object' &&
+        !Array.isArray(task.channelMeta)
+          ? (task.channelMeta as Record<string, unknown>)
+          : undefined;
+
       const chatResult = await this.chatService.chat(
         agent,
         {
@@ -202,7 +209,7 @@ export class ScheduleService {
         },
         task.userId,
         // 到期指令只作模型输入，不写入 session；会话里只出现 Agent 回复
-        { hideUserMessage: true },
+        { hideUserMessage: true, channelMeta },
       );
 
       const delivered = await this.channelDelivery.deliver({
@@ -214,6 +221,7 @@ export class ScheduleService {
         response: chatResult.response,
         sessionId: task.sessionId,
         channel,
+        channelMeta,
       });
 
       await this.prisma.scheduledTask.update({

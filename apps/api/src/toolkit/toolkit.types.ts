@@ -42,6 +42,11 @@ export const REQUEST_CONTEXT_KEYS = {
    * 定时任务创建时会写入任务，到期结果回传到同一渠道。
    */
   channel: 'channel',
+  /**
+   * 渠道附加元数据（如微信 peerUserId / accountId / contextToken），
+   * 创建定时任务时一并落库，供到期回传使用。
+   */
+  channelMeta: 'channelMeta',
   /** Record<toolkitId, ToolkitSettings> */
   toolkitSettings: 'toolkitSettings',
 } as const;

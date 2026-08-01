@@ -1,5 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import type { ScheduleChannel } from '../toolkit/toolkit.types.js';
+import { WechatOutboundService } from '../wechat/wechat-outbound.service.js';
 
 export interface ChannelDeliveryPayload {
   taskId: string;
@@ -11,16 +12,21 @@ export interface ChannelDeliveryPayload {
   /** 创建任务时的会话；对话内容已写入该 session */
   sessionId: string;
   channel: ScheduleChannel | string;
+  channelMeta?: Record<string, unknown> | null;
 }
 
 /**
  * 渠道侧「触达」通知（对话消息本身已由 ChatService 写入创建时的 session）。
- * - web：前端 inbox 轮询，把新消息刷进原会话后 ack
- * - wechat：预留推送，提醒用户去看同一会话
+ * - web：前端 inbox 轮询后 ack
+ * - wechat：sendMessage 推送到对端
  */
 @Injectable()
 export class ChannelDeliveryService {
   private readonly logger = new Logger(ChannelDeliveryService.name);
+
+  constructor(
+    @Optional() private readonly wechatOutbound?: WechatOutboundService,
+  ) {}
 
   /**
    * @returns true 表示渠道已同步投递完成（可立刻写 deliveredAt）；
@@ -50,10 +56,48 @@ export class ChannelDeliveryService {
   private async deliverWechat(
     payload: ChannelDeliveryPayload,
   ): Promise<boolean> {
-    // 预留：推送「会话有新回复」，消息体已在 session 中
-    this.logger.warn(
-      `WeChat 渠道尚未接入，任务 ${payload.taskId} 已写入 session=${payload.sessionId}`,
-    );
-    return false;
+    if (!this.wechatOutbound) {
+      this.logger.warn(
+        `WeChat 出站服务未就绪，任务 ${payload.taskId} 仅写入 session`,
+      );
+      return false;
+    }
+
+    const meta = payload.channelMeta ?? {};
+    const peerUserId = String(meta.peerUserId ?? '');
+    const accountId = String(meta.accountId ?? '');
+    const accountDbId = String(meta.accountDbId ?? '');
+    const contextToken =
+      typeof meta.contextToken === 'string' ? meta.contextToken : undefined;
+    const text = payload.response?.trim();
+
+    if (!text || !peerUserId) {
+      this.logger.warn(
+        `WeChat 投递缺少 peer/response，task=${payload.taskId}`,
+      );
+      return false;
+    }
+
+    let ok = false;
+    if (accountDbId) {
+      ok = await this.wechatOutbound.sendByDbId({
+        accountDbId,
+        peerUserId,
+        text,
+        contextToken,
+      });
+    } else if (accountId) {
+      ok = await this.wechatOutbound.sendByIlinkAccountId({
+        accountId,
+        peerUserId,
+        text,
+        contextToken,
+      });
+    }
+
+    if (!ok) {
+      this.logger.warn(`WeChat 投递失败 task=${payload.taskId}`);
+    }
+    return ok;
   }
 }

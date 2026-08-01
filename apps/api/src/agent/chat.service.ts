@@ -107,7 +107,11 @@ export class ChatService {
     agent: AgentWithMounts,
     dto: ChatDto,
     userId: string,
-    options?: { threadTitle?: string; hideUserMessage?: boolean },
+    options?: {
+      threadTitle?: string;
+      hideUserMessage?: boolean;
+      channelMeta?: Record<string, unknown>;
+    },
   ) {
     const { threadId, resourceId } = await this.ensureThread(
       dto.sessionId,
@@ -122,6 +126,7 @@ export class ChatService {
       agent.id,
       threadId,
       dto.channel,
+      options?.channelMeta,
     );
 
     const hideUserMessage = options?.hideUserMessage === true;
@@ -143,7 +148,8 @@ export class ChatService {
       agentName: agent.name,
       sessionId: threadId,
       userMessage: dto.message,
-      response: result.text,
+      // 多 step（tool call）时 text 会拼上中间话术；渠道回传只要最后一步
+      response: extractFinalAssistantText(result),
       timestamp: new Date().toISOString(),
     };
   }
@@ -280,12 +286,16 @@ export class ChatService {
     agentId: string,
     sessionId: string,
     channel: string = 'web',
+    channelMeta?: Record<string, unknown>,
   ) {
     const requestContext = new RequestContext();
     requestContext.set(REQUEST_CONTEXT_KEYS.userId, userId);
     requestContext.set(REQUEST_CONTEXT_KEYS.agentId, agentId);
     requestContext.set(REQUEST_CONTEXT_KEYS.sessionId, sessionId);
     requestContext.set(REQUEST_CONTEXT_KEYS.channel, channel);
+    if (channelMeta && Object.keys(channelMeta).length > 0) {
+      requestContext.set(REQUEST_CONTEXT_KEYS.channelMeta, channelMeta);
+    }
     requestContext.set(
       REQUEST_CONTEXT_KEYS.toolkitSettings,
       await this.toolkitService.getSettingsMap(userId),
@@ -333,6 +343,24 @@ export class ChatService {
     };
   }
 
+}
+
+/**
+ * 多轮 tool-call 时 Mastra 的 `text` 会拼接各 step 文本。
+ * 渠道回传（微信等）只取最后一个非空 step 的文本作为最终回复。
+ */
+function extractFinalAssistantText(result: {
+  text?: string;
+  steps?: Array<{ text?: string }>;
+}): string {
+  const steps = result.steps ?? [];
+  for (let i = steps.length - 1; i >= 0; i -= 1) {
+    const stepText = steps[i]?.text?.trim();
+    if (stepText) {
+      return stepText;
+    }
+  }
+  return result.text?.trim() ?? '';
 }
 
 interface ThreadLike {

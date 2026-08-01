@@ -15,6 +15,9 @@ import type {
   SkillSummary,
   Toolkit,
   UiMessage,
+  WechatAccount,
+  WechatLoginStart,
+  WechatLoginStatus,
   Workflow,
 } from '@/types';
 
@@ -31,6 +34,7 @@ export const queryKeys = {
     ['skills', name, 'file', path] as const,
   skillAssistant: (name: string) => ['skills', name, 'assistant'] as const,
   scheduleInbox: ['schedule', 'inbox'] as const,
+  wechatAccounts: ['wechat', 'accounts'] as const,
 };
 
 // ---- Agents ----
@@ -342,5 +346,94 @@ export function useAckScheduleInbox() {
       api.post<{ acked: number }>('/schedule/inbox/ack', { taskIds }),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.scheduleInbox }),
+  });
+}
+
+// ---- WeChat 渠道 ----
+
+export function useWechatAccounts() {
+  return useQuery({
+    queryKey: queryKeys.wechatAccounts,
+    queryFn: () => api.get<WechatAccount[]>('/wechat/accounts'),
+  });
+}
+
+export function useStartWechatLogin() {
+  return useMutation({
+    mutationFn: () => api.post<WechatLoginStart>('/wechat/login/start'),
+  });
+}
+
+export function useWechatLoginStatus(sessionKey: string | null) {
+  return useQuery({
+    queryKey: ['wechat', 'login', sessionKey],
+    queryFn: () =>
+      api.get<WechatLoginStatus>(
+        `/wechat/login/status?sessionKey=${encodeURIComponent(sessionKey!)}`,
+      ),
+    enabled: Boolean(sessionKey),
+    refetchInterval: (query) => {
+      const status = query.state.data?.status;
+      if (
+        !sessionKey ||
+        status === 'done' ||
+        status === 'none' ||
+        status === 'confirmed' ||
+        status === 'binded_redirect' ||
+        status === 'verify_code_blocked'
+      ) {
+        return false;
+      }
+      return 2_000;
+    },
+  });
+}
+
+export function useConfirmWechatBind() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      defaultAgentId: string;
+      accountId: string;
+      token: string;
+      baseUrl?: string;
+    }) => api.post<WechatAccount>('/wechat/login/confirm', body),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.wechatAccounts }),
+  });
+}
+
+export function useSubmitWechatVerifyCode() {
+  return useMutation({
+    mutationFn: (body: { sessionKey: string; code: string }) =>
+      api.post<{ ok: boolean; message: string }>(
+        '/wechat/login/verify-code',
+        body,
+      ),
+  });
+}
+
+export function useUpdateWechatAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: string;
+      defaultAgentId?: string;
+      enabled?: boolean;
+    }) => api.patch<WechatAccount>(`/wechat/accounts/${id}`, body),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.wechatAccounts }),
+  });
+}
+
+export function useDeleteWechatAccount() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/wechat/accounts/${id}`),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.wechatAccounts }),
   });
 }

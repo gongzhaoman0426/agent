@@ -100,6 +100,15 @@ export class ScheduleToolkit implements ToolkitDefinition {
             (SCHEDULE_CHANNELS as readonly string[]).includes(channelRaw)
               ? channelRaw
               : 'web';
+          const channelMetaRaw = context.requestContext.get(
+            REQUEST_CONTEXT_KEYS.channelMeta,
+          );
+          const channelMeta =
+            channelMetaRaw &&
+            typeof channelMetaRaw === 'object' &&
+            !Array.isArray(channelMetaRaw)
+              ? (channelMetaRaw as Record<string, unknown>)
+              : undefined;
 
           const when = this.scheduleService.resolveRunAt({
             runAt,
@@ -112,6 +121,7 @@ export class ScheduleToolkit implements ToolkitDefinition {
             sessionId,
             message,
             channel,
+            channelMeta,
             runAt: when,
           });
 
