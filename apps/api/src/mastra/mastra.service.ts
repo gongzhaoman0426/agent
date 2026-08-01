@@ -8,12 +8,12 @@ import { createOpenAICompatible } from '@ai-sdk/openai-compatible';
 
 /**
  * 全局唯一的 Mastra 基础设施：
- * - Memory：会话历史（lastMessages）+ 跨会话语义召回（semanticRecall, pgvector）
+ * - Memory：会话历史（lastMessages）；可选跨会话语义召回（semanticRecall + embedder + pgvector）
  * - 存储/向量表由 Mastra 自动建表管理，业务表走 Prisma
  */
 type ModelRouterId = `${string}/${string}`;
 
-const DEFAULT_MODEL = 'openai/gpt-5.6-luna';
+const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash';
 
 /**
  * 部分 OpenAI 兼容代理（如 yunwu.ai）的流式响应不发送 finish_reason 就直接
@@ -121,14 +121,9 @@ export class MastraService {
     this.openaiBaseUrl = configService.get<string>('OPENAI_BASE_URL');
     this.openaiApiKey = configService.get<string>('OPENAI_API_KEY');
 
-    const embeddingModel =
-      configService.get<string>('MASTRA_EMBEDDING_MODEL') ||
-      'openai/text-embedding-3-small';
-
     /**
      * 语义召回要为「每次提问」和「每条落库消息」各调一次 embedding 接口。
-     * 走第三方代理时这项开销很大（实测 2~9s 且不稳定），因此做成开关：
-     * 关闭后仅保留 lastMessages 的近期上下文，响应明显更快。
+     * 关闭时不需要 embedder / vector，仅保留 lastMessages 近期上下文。
      */
     const semanticRecall =
       (configService.get<string>('MASTRA_SEMANTIC_RECALL') ?? 'false') ===
@@ -145,12 +140,19 @@ export class MastraService {
         connectionString,
         schemaName: 'mastra',
       }),
-      vector: new PgVector({
-        id: 'agent-next-vector',
-        connectionString,
-        schemaName: 'mastra',
-      }),
-      embedder: new ModelRouterEmbeddingModel(embeddingModel),
+      ...(semanticRecall
+        ? {
+            vector: new PgVector({
+              id: 'agent-next-vector',
+              connectionString,
+              schemaName: 'mastra',
+            }),
+            embedder: new ModelRouterEmbeddingModel(
+              configService.get<string>('MASTRA_EMBEDDING_MODEL') ||
+                'openai/text-embedding-3-small',
+            ),
+          }
+        : {}),
       options: {
         lastMessages: 10,
         // resource = `${userId}:${agentId}`，跨会话召回但不跨 Agent

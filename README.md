@@ -41,7 +41,7 @@ apps/
 ```bash
 docker compose up -d        # PostgreSQL (pgvector)，port 5434
 pnpm install
-cp apps/api/.env.example apps/api/.env   # 填入 OPENAI_API_KEY
+cp apps/api/.env.example apps/api/.env   # 填入 DEEPSEEK_API_KEY（及可选 OPENAI_API_KEY）
 pnpm db:push                # 初始化业务表
 pnpm dev:api                # 后端
 pnpm dev:web                # 前端
@@ -50,8 +50,8 @@ pnpm dev:web                # 前端
 ## 环境变量（apps/api/.env）
 
 - `DATABASE_URL` — PostgreSQL 连接串
-- `OPENAI_API_KEY` / `OPENAI_BASE_URL` — 模型 API
-- `MASTRA_DEFAULT_MODEL` — 默认模型（`openai/gpt-5.6-luna`）
+- `DEEPSEEK_API_KEY` — DeepSeek 官方 API Key（默认对话模型）
+- `MASTRA_DEFAULT_MODEL` — 默认模型（`deepseek/deepseek-v4-flash`）
 - `MASTRA_TITLE_MODEL` — 会话标题生成模型，默认同主模型（收尾阶段异步执行，不阻塞回复）
-- `MASTRA_SEMANTIC_RECALL` — 跨会话语义召回，默认 `false`。开启后每轮提问和每条落库消息都要调 embedding 接口（第三方代理下实测每次 2~9s），响应会明显变慢
+- `MASTRA_SEMANTIC_RECALL` — 跨会话语义召回，默认 `false`。关闭时不需要 embedding；开启后还需 `MASTRA_EMBEDDING_MODEL` 与对应 API Key（如 `OPENAI_API_KEY`）
 - `BETTER_AUTH_SECRET` / `BETTER_AUTH_URL` / `BETTER_AUTH_TRUSTED_ORIGINS` — 认证
