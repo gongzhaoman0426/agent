@@ -1,10 +1,8 @@
 /**
- * PM2 进程配置：只托管 API。
- * 前端构建产物由 Nginx（或其它静态服务）托管，并把 /api 反代到本进程。
- *
- * 用法（在仓库根目录）：
- *   pnpm build
- *   pm2 start ecosystem.config.cjs
+ * PM2 双进程；对外域名 / HTTPS 交给 Nginx Proxy Manager。
+ * - agent-next-api  → :3003
+ * - agent-next-web  → :5180（静态前端 + /api 反代）
+ * NPM 面板里 Proxy Host 转发到宿主机:5180 即可。
  */
 module.exports = {
   apps: [
@@ -20,7 +18,21 @@ module.exports = {
       env: {
         NODE_ENV: 'production',
       },
-      // 日志：pm2 logs agent-next-api
+      time: true,
+    },
+    {
+      name: 'agent-next-web',
+      cwd: './',
+      script: 'scripts/serve-web.mjs',
+      interpreter: 'node',
+      instances: 1,
+      exec_mode: 'fork',
+      autorestart: true,
+      env: {
+        NODE_ENV: 'production',
+        WEB_PORT: 5180,
+        API_PROXY_TARGET: 'http://127.0.0.1:3003',
+      },
       time: true,
     },
   ],

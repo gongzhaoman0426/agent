@@ -84,113 +84,93 @@ your-skill.zip
 - **工具包**：在 `apps/api/src/toolkit/toolkits/` 新增并注册 Provider
 - **工作流**：在 `apps/api/src/workflow/workflows/` 用 `createWorkflow` 定义，启动时自动同步到数据库
 
-## 生产部署（PM2）
+## 生产部署（PM2 + Nginx Proxy Manager）
 
-API 用 PM2 守护；前端构建为静态文件，由 Nginx 托管，并把 `/api` 反代到 API。
+本机用 PM2 跑应用；域名、HTTPS、对外入口在 **Nginx Proxy Manager** 面板里配置。
 
-### 1. 准备服务器
+| 进程 | 作用 | 端口 |
+|------|------|------|
+| `agent-next-api` | Nest API | `3003` |
+| `agent-next-web` | 静态前端，并把 `/api` 转到 API | `5180` |
+
+NPM 只反代到 **`5180`** 即可（页面和 `/api` 都走这个口）。
+
+### 1. 服务器准备与构建
 
 ```bash
-# Node.js ≥ 22.13、pnpm、pm2、Docker（或自备 PostgreSQL）
-npm i -g pnpm pm2
-```
-
-### 2. 拉代码并配置
-
-```bash
+npm i -g pnpm pm2          # 这里的 npm 是 Node 包管理器
 git clone https://github.com/gongzhaoman0426/agent.git
 cd agent
-
-docker compose up -d                  # PostgreSQL（端口 5434）
+docker compose up -d
 cp apps/api/.env.example apps/api/.env
-# 编辑 .env：DEEPSEEK_API_KEY、BETTER_AUTH_SECRET
-# 生产务必改：
-#   BETTER_AUTH_URL=https://你的域名
-#   BETTER_AUTH_TRUSTED_ORIGINS=https://你的域名
 ```
 
-### 3. 安装、建表、构建
+编辑 `apps/api/.env`，认证地址填**最终给用户访问的域名**（NPM 配好的那个）：
+
+```bash
+DEEPSEEK_API_KEY=你的key
+BETTER_AUTH_SECRET=换成足够长的随机串
+PORT=3003
+BETTER_AUTH_URL=https://agent.example.com
+BETTER_AUTH_TRUSTED_ORIGINS=https://agent.example.com
+```
 
 ```bash
 pnpm install
-pnpm db:generate
+pnpm db:generate          # 必须先于 build
 pnpm db:push
-pnpm build                            # 同时构建 api + web
-```
-
-- API 产物：`apps/api/dist/main.js`
-- 前端产物：`apps/web/dist/`
-
-### 4. 用 PM2 启动 API
-
-仓库根目录已有 `ecosystem.config.cjs`：
-
-```bash
+pnpm build
 pm2 start ecosystem.config.cjs
 pm2 save
-pm2 startup                           # 按提示配置开机自启
+pm2 startup
+pm2 status                # api / web 都 online
 ```
 
-常用命令：
+先本机验证：`http://服务器IP:5180` 能打开再去配 NPM。
 
-```bash
-pm2 status
-pm2 logs agent-next-api
-pm2 restart agent-next-api
-pm2 stop agent-next-api
+### 2. Nginx Proxy Manager 面板
+
+**Hosts → Proxy Hosts → Add Proxy Host：**
+
+| 项 | 填法 |
+|----|------|
+| Domain Names | `agent.example.com`（你的域名） |
+| Scheme | `http` |
+| Forward Hostname / IP | 宿主机地址。NPM 若在 Docker 里，常用 `172.17.0.1` 或宿主机局域网 IP，不要填 `127.0.0.1`（那是容器自己） |
+| Forward Port | `5180` |
+| Websockets Support | 建议打开 |
+| Block Common Exploits | 可选 |
+| SSL | 选 Let's Encrypt 或已有证书，勾选 Force SSL |
+
+保存后用 `https://agent.example.com` 访问。
+
+聊天是 SSE 长连接，若出现流式中断，在该 Proxy Host 的 **Advanced** 里可加：
+
+```nginx
+proxy_buffering off;
+proxy_read_timeout 3600s;
 ```
 
-更新发布：
+### 3. 更新发布
 
 ```bash
+cd /root/apps/agent   # 按你的路径
 git pull
 pnpm install
 pnpm db:generate
-pnpm db:push                          # schema 有变更时
+pnpm db:push              # schema 有变更时
 pnpm build
-pm2 restart agent-next-api
+pm2 restart all
 ```
 
-### 5. Nginx 示例
-
-把前端静态目录指到 `apps/web/dist`，`/api` 反代到本机 `3003`（与 `.env` 里 `PORT` 一致）：
-
-```nginx
-server {
-    listen 80;
-    server_name your.domain.com;
-
-    root /path/to/agent/apps/web/dist;
-    index index.html;
-
-    location /api/ {
-        proxy_pass http://127.0.0.1:3003;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        # 聊天 / 技能助手为 SSE 长连接
-        proxy_buffering off;
-        proxy_read_timeout 3600s;
-    }
-
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-}
-```
-
-HTTPS 可用 certbot 等另行配置。技能文件落在 `apps/api/data/skills/`，部署与备份时保留该目录。
+技能文件在 `apps/api/data/skills/`，备份时保留。NPM 侧一般不用改。
 
 ## 常用命令
 
 ```bash
-pnpm dev:api          # 启动 API
-pnpm dev:web          # 启动前端
-pnpm db:push          # 同步 Prisma schema
-pnpm db:generate      # 生成 Prisma Client
-pnpm typecheck        # 全仓类型检查
-pnpm build            # 构建
-pm2 start ecosystem.config.cjs   # 生产启动 API
+pnpm dev:api / pnpm dev:web
+pnpm db:generate && pnpm db:push
+pnpm build
+pnpm start:web                 # 仅前端静态服务（含 /api 反代）
+pm2 start ecosystem.config.cjs # API + 前端；对外用 Nginx Proxy Manager
 ```
