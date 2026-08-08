@@ -20,6 +20,7 @@ import {
 } from './pad/sns.js';
 import { WechatAccountService } from './wechat-account.service.js';
 import { WechatAdminService } from './wechat-admin.service.js';
+import { WechatOutboundService } from './wechat-outbound.service.js';
 
 @Injectable()
 export class WechatAdminOpsService {
@@ -28,6 +29,7 @@ export class WechatAdminOpsService {
   constructor(
     private readonly accounts: WechatAccountService,
     private readonly admin: WechatAdminService,
+    private readonly outbound: WechatOutboundService,
   ) {}
 
   private async requireOwnedAccount(accountId: string, agentId: string) {
@@ -36,6 +38,73 @@ export class WechatAdminOpsService {
       throw new Error('当前会话绑定的微信号无效');
     }
     return row;
+  }
+
+  /**
+   * 管理员主动触达：向指定 wxid 发送文本 / 语音 / 图片。
+   * 可与定时任务配合：到期指令里调用本能力给目标用户发运营消息。
+   */
+  async sendToUser(input: {
+    accountId: string;
+    agentId: string;
+    peerWxid: string;
+    toWxid: string;
+    type: 'text' | 'voice' | 'image';
+    text?: string;
+    imageUrl?: string;
+  }) {
+    await this.admin.requireAdmin(input.accountId, input.peerWxid);
+    await this.requireOwnedAccount(input.accountId, input.agentId);
+
+    const toWxid = input.toWxid.trim();
+    if (!toWxid) throw new Error('目标 wxid 不能为空');
+    if (toWxid === 'newsapp' || toWxid.startsWith('gh_')) {
+      throw new Error('不能向系统号/公众号发送');
+    }
+
+    if (input.type === 'text') {
+      const text = input.text?.trim() || '';
+      if (!text) throw new Error('发送文本时 text 不能为空');
+      const ok = await this.outbound.sendByDbId({
+        accountDbId: input.accountId,
+        peerWxid: toWxid,
+        text,
+      });
+      if (!ok) throw new Error('发送文本失败');
+      this.logger.log(
+        `管理员触达文本 account=${input.accountId} to=${toWxid} len=${text.length}`,
+      );
+      return { success: true as const, type: 'text' as const, to: toWxid };
+    }
+
+    if (input.type === 'voice') {
+      const text = input.text?.trim() || '';
+      if (!text) throw new Error('发送语音时 text（朗读文案）不能为空');
+      if (text.length > 300) throw new Error('语音文案最多 300 字');
+      const ok = await this.outbound.sendVoiceTextByDbId({
+        accountDbId: input.accountId,
+        peerWxid: toWxid,
+        text,
+      });
+      if (!ok) throw new Error('发送语音失败');
+      this.logger.log(
+        `管理员触达语音 account=${input.accountId} to=${toWxid}`,
+      );
+      return { success: true as const, type: 'voice' as const, to: toWxid };
+    }
+
+    const imageUrl = input.imageUrl?.trim() || '';
+    if (!imageUrl) throw new Error('发送图片时 imageUrl 不能为空');
+    const ok = await this.outbound.sendImageByDbId({
+      accountDbId: input.accountId,
+      peerWxid: toWxid,
+      imageUrl,
+    });
+    if (!ok) throw new Error('发送图片失败');
+    this.logger.log(
+      `管理员触达图片 account=${input.accountId} to=${toWxid}`,
+    );
+    return { success: true as const, type: 'image' as const, to: toWxid };
   }
 
   async postMoment(input: {

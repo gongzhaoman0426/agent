@@ -31,7 +31,7 @@ const settingsFields: SettingField[] = [
     key: 'adminTtlHours',
     label: '管理员有效期（小时）',
     description:
-      '提权后多久失效。填 0 或 permanent 表示永久（进程重启前一直有效）；默认 24',
+      '提权后多久失效。填 0 或 permanent 表示永久（落库，直至撤销）；默认 24',
     placeholder: '24 或 0（永久）',
     required: false,
   },
@@ -68,7 +68,7 @@ function requireWechatChannelMeta(requestContext: RequestContext): {
 export class WechatToolkit implements ToolkitDefinition {
   readonly name = '微信渠道';
   readonly description =
-    '微信私聊渠道：发图/语音/收转账；管理员密钥提权后可用发朋友圈、通过好友、备注、拉群、群公告、查通讯录等。向文件传输助手发送「暂停」/「恢复」可开关整号自动回复（状态会持久化）。';
+    '微信私聊渠道：发图/语音/收转账；管理员密钥提权后可用向指定好友发文本/语音/图片、发朋友圈、通过好友、备注、拉群、群公告、查通讯录等。可配合定时任务做主动触达运营。向文件传输助手发送「暂停」/「恢复」可开关整号自动回复（状态会持久化）。';
   readonly settingsFields = settingsFields;
   readonly tools: ToolsInput;
 
@@ -158,6 +158,44 @@ export class WechatToolkit implements ToolkitDefinition {
             accountId: ctx.accountId,
             peerWxid: ctx.peerWxid,
             secret: input.secret,
+          });
+        },
+      }),
+
+      wechat_send_to_user: createTool({
+        id: 'wechat-send-to-user',
+        description:
+          '【管理员】向指定好友 wxid 主动发送文本、语音或图片（不是回当前会话）。' +
+          '适合运营触达；配合定时任务时，到期指令应写清目标 wxid、类型与内容，并调用本工具。' +
+          'type=text 需 text；type=voice 需 text（TTS 朗读，≤300字）；type=image 需 imageUrl（公网 URL）。' +
+          '发给目标用户后，向管理员简短确认即可，勿把内部错误细节回传。',
+        inputSchema: z.object({
+          toWxid: z
+            .string()
+            .min(1)
+            .describe('目标好友 wxid，如 wxid_xxx；可用 list/search 联系人获取'),
+          type: z
+            .enum(['text', 'voice', 'image'])
+            .describe('消息类型：text=文字，voice=语音，image=图片'),
+          text: z
+            .string()
+            .optional()
+            .describe('文本内容，或语音要朗读的文案（voice 时必填）'),
+          imageUrl: z
+            .string()
+            .optional()
+            .describe('图片公网 URL（image 时必填）'),
+        }),
+        execute: async (input, { requestContext }) => {
+          const ctx = requireWechatChannelMeta(requestContext);
+          return this.adminOps.sendToUser({
+            accountId: ctx.accountId,
+            agentId: ctx.agentId,
+            peerWxid: ctx.peerWxid,
+            toWxid: input.toWxid,
+            type: input.type,
+            text: input.text,
+            imageUrl: input.imageUrl,
           });
         },
       }),
