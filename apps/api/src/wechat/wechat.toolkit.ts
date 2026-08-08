@@ -68,7 +68,7 @@ function requireWechatChannelMeta(requestContext: RequestContext): {
 export class WechatToolkit implements ToolkitDefinition {
   readonly name = '微信渠道';
   readonly description =
-    '微信私聊渠道：发图/语音/收转账；管理员密钥提权后可用发朋友圈、通过好友、备注、拉群、群公告、查通讯录等。向文件传输助手发送「暂停」/「恢复」可开关整号自动回复。';
+    '微信私聊渠道：发图/语音/收转账；管理员密钥提权后可用发朋友圈、通过好友、备注、拉群、群公告、查通讯录等。向文件传输助手发送「暂停」/「恢复」可开关整号自动回复（状态会持久化）。';
   readonly settingsFields = settingsFields;
   readonly tools: ToolsInput;
 
@@ -198,7 +198,7 @@ export class WechatToolkit implements ToolkitDefinition {
         }),
         execute: async (input, { requestContext }) => {
           const ctx = requireWechatChannelMeta(requestContext);
-          this.admin.requireAdmin(ctx.accountId, ctx.peerWxid);
+          await this.admin.requireAdmin(ctx.accountId, ctx.peerWxid);
           return this.friendRequests.agree({
             accountId: ctx.accountId,
             agentId: ctx.agentId,

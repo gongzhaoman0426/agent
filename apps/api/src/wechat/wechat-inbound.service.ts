@@ -9,6 +9,7 @@ import { WechatAccountService } from './wechat-account.service.js';
 import { WechatAdminService } from './wechat-admin.service.js';
 import { WechatFriendRequestService } from './wechat-friend-request.service.js';
 import { WechatOutboundService } from './wechat-outbound.service.js';
+import { WECHAT_USER_SAFE_ERROR } from '../common/channel-prompts.js';
 import {
   FILE_HELPER,
   WechatReplyGateService,
@@ -70,6 +71,7 @@ export class WechatInboundService {
     if (peerWxid.endsWith('@app') || peerWxid.startsWith('gh_')) return;
     if (msg.toWxid.includes('@chatroom')) return;
 
+    this.replyGate.hydrateFromRow(row.id, row.autoReplyPaused);
     if (this.replyGate.isPaused(row.id)) {
       this.logger.debug(
         `自动回复已暂停，忽略私聊 account=${row.id} from=${peerWxid}`,
@@ -115,7 +117,7 @@ export class WechatInboundService {
 
       // 管理员密钥：整段消息匹配则提权，密钥不进入模型上下文
       const settings = await this.getWechatToolkitSettings(row.userId);
-      const elevated = this.admin.tryElevate({
+      const elevated = await this.admin.tryElevate({
         accountId: row.id,
         peerWxid,
         message: text,
@@ -146,29 +148,32 @@ export class WechatInboundService {
     command: 'pause' | 'resume',
   ) {
     if (command === 'pause') {
-      this.replyGate.pause(row.id);
+      await this.replyGate.pause(row.id);
       await this.outbound.sendByDbId({
         accountDbId: row.id,
         peerWxid: FILE_HELPER,
         text: '已暂停自动回复。向文件传输助手发送「恢复」可重新开启。',
+        splitSegments: false,
       });
       return;
     }
 
-    this.replyGate.resume(row.id);
+    await this.replyGate.resume(row.id);
     await this.outbound.sendByDbId({
       accountDbId: row.id,
       peerWxid: FILE_HELPER,
       text: '已恢复自动回复。',
+      splitSegments: false,
     });
   }
 
   private async notifyAdmins(row: WechatAccount, prompt: string) {
+    this.replyGate.hydrateFromRow(row.id, row.autoReplyPaused);
     if (this.replyGate.isPaused(row.id)) {
       this.logger.debug(`自动回复已暂停，跳过好友请求通知 account=${row.id}`);
       return;
     }
-    const admins = this.admin.listActiveAdminPeers(row.id);
+    const admins = await this.admin.listActiveAdminPeers(row.id);
     if (admins.length === 0) {
       this.logger.warn(
         `有好友请求但无在线管理员会话 account=${row.id}；管理员需先密钥提权后再处理`,
@@ -243,7 +248,8 @@ export class WechatInboundService {
       await this.outbound.sendByDbId({
         accountDbId: row.id,
         peerWxid,
-        text: `处理失败：${error instanceof Error ? error.message : String(error)}`,
+        text: WECHAT_USER_SAFE_ERROR,
+        splitSegments: false,
       });
     }
   }

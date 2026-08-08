@@ -5,11 +5,13 @@ import {
   OnModuleInit,
 } from '@nestjs/common';
 import type { WechatAccount } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service.js';
 import { getRedisSyncMsg, httpSyncMsg } from './pad/message.js';
 import { getPadOnlineStatus } from './pad/status.js';
 import type { ParsedPadMessage } from './pad/types.js';
 import { WechatAccountService } from './wechat-account.service.js';
 import { WechatInboundService } from './wechat-inbound.service.js';
+import { WechatReplyGateService } from './wechat-reply-gate.service.js';
 
 const EMPTY_POLL_MS = 2_000;
 const RETRY_DELAY_MS = 3_000;
@@ -17,12 +19,14 @@ const BACKOFF_DELAY_MS = 30_000;
 const MAX_CONSECUTIVE_FAILURES = 5;
 const ONLINE_CHECK_EVERY = 30;
 const SEEN_CAP = 3_000;
+const SEEN_PERSIST_DEBOUNCE_MS = 2_000;
 
 /**
  * v875 入站：
  * - 优先 GetRedisSyncMsg（实测 AddMsgs 在这里）
  * - HttpSyncMsg 作补充（文档队列，当前常为空）
  * - 按 msgId 去重；首次快照只记位点、不回放历史
+ * - seen / bootstrapped 落库，进程重启可续接
  */
 @Injectable()
 export class WechatMonitorService implements OnModuleInit, OnModuleDestroy {
@@ -30,11 +34,15 @@ export class WechatMonitorService implements OnModuleInit, OnModuleDestroy {
   private readonly abortByAccount = new Map<string, AbortController>();
   private readonly seenByAccount = new Map<string, Set<string>>();
   private readonly bootstrapped = new Set<string>();
+  private readonly hydrated = new Set<string>();
+  private readonly persistTimers = new Map<string, NodeJS.Timeout>();
   private running = false;
 
   constructor(
     private readonly accounts: WechatAccountService,
     private readonly inbound: WechatInboundService,
+    private readonly prisma: PrismaService,
+    private readonly replyGate: WechatReplyGateService,
   ) {}
 
   async onModuleInit() {
@@ -48,6 +56,10 @@ export class WechatMonitorService implements OnModuleInit, OnModuleDestroy {
       controller.abort();
     }
     this.abortByAccount.clear();
+    for (const timer of this.persistTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.persistTimers.clear();
   }
 
   async reload() {
@@ -60,6 +72,12 @@ export class WechatMonitorService implements OnModuleInit, OnModuleDestroy {
         this.abortByAccount.delete(id);
         this.seenByAccount.delete(id);
         this.bootstrapped.delete(id);
+        this.hydrated.delete(id);
+        const timer = this.persistTimers.get(id);
+        if (timer) {
+          clearTimeout(timer);
+          this.persistTimers.delete(id);
+        }
       }
     }
 
@@ -85,6 +103,8 @@ export class WechatMonitorService implements OnModuleInit, OnModuleDestroy {
       const row = await this.accounts.findById(seed.id);
       if (!row || !row.enabled) break;
 
+      this.replyGate.hydrateFromRow(row.id, row.autoReplyPaused);
+
       try {
         if (pollCount % ONLINE_CHECK_EVERY === 0) {
           const status = await getPadOnlineStatus(row.authKey);
@@ -105,7 +125,7 @@ export class WechatMonitorService implements OnModuleInit, OnModuleDestroy {
         );
         consecutiveFailures = 0;
 
-        const fresh = this.filterNewMessages(row.id, messages);
+        const fresh = await this.filterNewMessages(row.id, messages);
         if (fresh.length === 0) {
           await this.sleep(EMPTY_POLL_MS, abortSignal);
           continue;
@@ -144,13 +164,11 @@ export class WechatMonitorService implements OnModuleInit, OnModuleDestroy {
   ): Promise<ParsedPadMessage[]> {
     const byId = new Map<string, ParsedPadMessage>();
 
-    // 主路径：Redis 缓存同步包（v875 消息实际在这里）
     const fromRedis = await getRedisSyncMsg(authKey, abortSignal);
     for (const msg of fromRedis) {
       byId.set(this.messageKey(msg), msg);
     }
 
-    // 补充：HttpSyncMsg 每 15 次探一次（当前常为空，避免空转）
     if (pollCount % 15 === 1) {
       try {
         const fromHttp = await httpSyncMsg(authKey, 20, abortSignal);
@@ -165,10 +183,38 @@ export class WechatMonitorService implements OnModuleInit, OnModuleDestroy {
     return [...byId.values()];
   }
 
-  private filterNewMessages(
+  private async ensureHydrated(accountId: string) {
+    if (this.hydrated.has(accountId)) return;
+
+    const row = await this.prisma.wechatAccount.findUnique({
+      where: { id: accountId },
+      select: {
+        syncBootstrapped: true,
+        syncSeenMsgIds: true,
+      },
+    });
+
+    const seen = new Set<string>();
+    const ids = parseSeenMsgIds(row?.syncSeenMsgIds);
+    for (const id of ids) seen.add(id);
+    this.seenByAccount.set(accountId, seen);
+
+    if (row?.syncBootstrapped) {
+      this.bootstrapped.add(accountId);
+      this.logger.log(
+        `入站位点已从数据库恢复 account=${accountId} seen=${seen.size}`,
+      );
+    }
+
+    this.hydrated.add(accountId);
+  }
+
+  private async filterNewMessages(
     accountId: string,
     messages: ParsedPadMessage[],
-  ): ParsedPadMessage[] {
+  ): Promise<ParsedPadMessage[]> {
+    await this.ensureHydrated(accountId);
+
     let seen = this.seenByAccount.get(accountId);
     if (!seen) {
       seen = new Set<string>();
@@ -182,6 +228,7 @@ export class WechatMonitorService implements OnModuleInit, OnModuleDestroy {
       }
       this.trimSeen(seen);
       this.bootstrapped.add(accountId);
+      await this.persistSyncState(accountId, seen, true);
       this.logger.log(
         `入站位点已建立 account=${accountId} seen=${seen.size}（历史不回放）`,
       );
@@ -189,14 +236,51 @@ export class WechatMonitorService implements OnModuleInit, OnModuleDestroy {
     }
 
     const fresh: ParsedPadMessage[] = [];
+    let changed = false;
     for (const msg of messages) {
       const key = this.messageKey(msg);
       if (seen.has(key)) continue;
       seen.add(key);
       fresh.push(msg);
+      changed = true;
     }
     this.trimSeen(seen);
+    if (changed) {
+      this.schedulePersistSyncState(accountId, seen);
+    }
     return fresh;
+  }
+
+  private schedulePersistSyncState(accountId: string, seen: Set<string>) {
+    const prev = this.persistTimers.get(accountId);
+    if (prev) clearTimeout(prev);
+    const timer = setTimeout(() => {
+      this.persistTimers.delete(accountId);
+      void this.persistSyncState(accountId, seen, true);
+    }, SEEN_PERSIST_DEBOUNCE_MS);
+    this.persistTimers.set(accountId, timer);
+  }
+
+  private async persistSyncState(
+    accountId: string,
+    seen: Set<string>,
+    bootstrapped: boolean,
+  ) {
+    try {
+      await this.prisma.wechatAccount.update({
+        where: { id: accountId },
+        data: {
+          syncBootstrapped: bootstrapped,
+          syncSeenMsgIds: [...seen].slice(-SEEN_CAP),
+        },
+      });
+    } catch (error) {
+      this.logger.warn(
+        `持久化入站位点失败 account=${accountId}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   private messageKey(msg: ParsedPadMessage): string {
@@ -232,4 +316,11 @@ export class WechatMonitorService implements OnModuleInit, OnModuleDestroy {
       abortSignal.addEventListener('abort', onAbort, { once: true });
     });
   }
+}
+
+function parseSeenMsgIds(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .map((item) => (typeof item === 'string' ? item.trim() : ''))
+    .filter(Boolean);
 }

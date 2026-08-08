@@ -1,4 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service.js';
 
 const FILE_HELPER = 'filehelper';
 
@@ -24,30 +25,59 @@ const RESUME_COMMANDS = new Set([
 export type FileHelperGateCommand = 'pause' | 'resume';
 
 /**
- * 账号级自动回复开关。
- * 通过「自己 → 文件传输助手」发送暂停/恢复指令控制；进程内有效。
+ * 账号级自动回复开关（落库 + 内存缓存）。
+ * 通过「自己 → 文件传输助手」发送暂停/恢复指令控制。
  */
 @Injectable()
-export class WechatReplyGateService {
+export class WechatReplyGateService implements OnModuleInit {
   private readonly logger = new Logger(WechatReplyGateService.name);
-  /** accountId → paused */
+  /** accountId → paused（与 DB autoReplyPaused 同步） */
   private readonly paused = new Set<string>();
+
+  constructor(private readonly prisma: PrismaService) {}
+
+  async onModuleInit() {
+    const rows = await this.prisma.wechatAccount.findMany({
+      where: { autoReplyPaused: true },
+      select: { id: true },
+    });
+    for (const row of rows) {
+      this.paused.add(row.id);
+    }
+    if (rows.length > 0) {
+      this.logger.log(`已从数据库恢复 ${rows.length} 个暂停自动回复的账号`);
+    }
+  }
 
   isPaused(accountId: string): boolean {
     return this.paused.has(accountId);
   }
 
-  pause(accountId: string): boolean {
+  /** 以 DB 为准刷新缓存（监控轮询拿到最新 row 时可用） */
+  hydrateFromRow(accountId: string, autoReplyPaused: boolean) {
+    if (autoReplyPaused) this.paused.add(accountId);
+    else this.paused.delete(accountId);
+  }
+
+  async pause(accountId: string): Promise<boolean> {
     const already = this.paused.has(accountId);
     this.paused.add(accountId);
+    await this.prisma.wechatAccount.update({
+      where: { id: accountId },
+      data: { autoReplyPaused: true },
+    });
     if (!already) {
       this.logger.log(`自动回复已暂停 account=${accountId}`);
     }
     return !already;
   }
 
-  resume(accountId: string): boolean {
+  async resume(accountId: string): Promise<boolean> {
     const was = this.paused.delete(accountId);
+    await this.prisma.wechatAccount.update({
+      where: { id: accountId },
+      data: { autoReplyPaused: false },
+    });
     if (was) {
       this.logger.log(`自动回复已恢复 account=${accountId}`);
     }

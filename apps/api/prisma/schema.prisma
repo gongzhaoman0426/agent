@@ -302,10 +302,35 @@ model WechatAccount {
   proxy      String   @default("")
   deviceWay  String   @default("")
   enabled    Boolean  @default(true)
+  /** 整号自动回复是否暂停（文件传输助手「暂停/恢复」） */
+  autoReplyPaused Boolean @default(false)
+  /** 入站去重位点是否已建立（避免重启后回放历史） */
+  syncBootstrapped Boolean @default(false)
+  /** 近期已处理 msgId 列表（JSON string[]，有上限） */
+  syncSeenMsgIds Json @default("[]")
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
+
+  adminGrants WechatAdminGrant[]
 
   @@index([userId, enabled])
   @@index([agentId, enabled])
   @@map("wechat_accounts")
+}
+
+/** 微信管理员提权（按账号 + 对端 wxid） */
+model WechatAdminGrant {
+  id        String    @id @default(cuid())
+  accountId String
+  peerWxid  String
+  /** null = 永久有效 */
+  expiresAt DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  account WechatAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, peerWxid])
+  @@index([accountId])
+  @@map("wechat_admin_grants")
 }

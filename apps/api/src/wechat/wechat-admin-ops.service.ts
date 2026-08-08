@@ -45,7 +45,7 @@ export class WechatAdminOpsService {
     content: string;
     imageUrls?: string[];
   }) {
-    this.admin.requireAdmin(input.accountId, input.peerWxid);
+    await this.admin.requireAdmin(input.accountId, input.peerWxid);
     const row = await this.requireOwnedAccount(input.accountId, input.agentId);
     const content = input.content.trim();
     if (!content && !(input.imageUrls?.length)) {
@@ -88,7 +88,7 @@ export class WechatAdminOpsService {
     userName: string;
     remarkName: string;
   }) {
-    this.admin.requireAdmin(input.accountId, input.peerWxid);
+    await this.admin.requireAdmin(input.accountId, input.peerWxid);
     const row = await this.requireOwnedAccount(input.accountId, input.agentId);
     await modifyRemark({
       authKey: row.authKey,
@@ -105,7 +105,7 @@ export class WechatAdminOpsService {
     topic?: string;
     userList: string[];
   }) {
-    this.admin.requireAdmin(input.accountId, input.peerWxid);
+    await this.admin.requireAdmin(input.accountId, input.peerWxid);
     const row = await this.requireOwnedAccount(input.accountId, input.agentId);
     const userList = input.userList.map((u) => u.trim()).filter(Boolean);
     if (userList.length < 2) {
@@ -132,7 +132,7 @@ export class WechatAdminOpsService {
     userList: string[];
     mode?: 'invite' | 'add';
   }) {
-    this.admin.requireAdmin(input.accountId, input.peerWxid);
+    await this.admin.requireAdmin(input.accountId, input.peerWxid);
     const row = await this.requireOwnedAccount(input.accountId, input.agentId);
     const userList = input.userList.map((u) => u.trim()).filter(Boolean);
     if (!input.chatRoomName.trim() || userList.length === 0) {
@@ -157,7 +157,7 @@ export class WechatAdminOpsService {
     chatRoomName: string;
     content: string;
   }) {
-    this.admin.requireAdmin(input.accountId, input.peerWxid);
+    await this.admin.requireAdmin(input.accountId, input.peerWxid);
     const row = await this.requireOwnedAccount(input.accountId, input.agentId);
     await setChatroomAnnouncement({
       authKey: row.authKey,
@@ -173,7 +173,7 @@ export class WechatAdminOpsService {
     peerWxid: string;
     limit?: number;
   }) {
-    this.admin.requireAdmin(input.accountId, input.peerWxid);
+    await this.admin.requireAdmin(input.accountId, input.peerWxid);
     const row = await this.requireOwnedAccount(input.accountId, input.agentId);
 
     // v875: Data.ContactList.contactUsernameList + continueFlag 分页
@@ -233,7 +233,7 @@ export class WechatAdminOpsService {
     peerWxid: string;
     keyword: string;
   }) {
-    this.admin.requireAdmin(input.accountId, input.peerWxid);
+    await this.admin.requireAdmin(input.accountId, input.peerWxid);
     const row = await this.requireOwnedAccount(input.accountId, input.agentId);
     const keyword = input.keyword.trim();
     if (!keyword) throw new Error('搜索关键字不能为空');

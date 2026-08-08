@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import type { RequestContext } from '@mastra/core/request-context';
+import { PrismaService } from '../prisma/prisma.service.js';
 import {
   readToolkitSettings,
   type ToolkitSettings,
@@ -8,7 +9,7 @@ import {
 
 const TOOLKIT_ID = 'wechat-toolkit';
 const DEFAULT_TTL_HOURS = 24;
-/** expiresAt 用该值表示永久提权 */
+/** 内存缓存用 Infinity 表示永久；DB 中 expiresAt = null */
 const PERMANENT_EXPIRES_AT = Number.POSITIVE_INFINITY;
 
 type AdminGrant = {
@@ -19,9 +20,32 @@ type AdminGrant = {
 };
 
 @Injectable()
-export class WechatAdminService {
+export class WechatAdminService implements OnModuleInit {
   private readonly logger = new Logger(WechatAdminService.name);
   private readonly grants = new Map<string, AdminGrant>();
+
+  constructor(private readonly prisma: PrismaService) {}
+
+  async onModuleInit() {
+    const now = new Date();
+    const rows = await this.prisma.wechatAdminGrant.findMany({
+      where: {
+        OR: [{ expiresAt: null }, { expiresAt: { gt: now } }],
+      },
+    });
+    for (const row of rows) {
+      this.grants.set(this.key(row.accountId, row.peerWxid), {
+        accountId: row.accountId,
+        peerWxid: row.peerWxid,
+        expiresAt: row.expiresAt
+          ? row.expiresAt.getTime()
+          : PERMANENT_EXPIRES_AT,
+      });
+    }
+    if (rows.length > 0) {
+      this.logger.log(`已从数据库恢复 ${rows.length} 条管理员提权`);
+    }
+  }
 
   getSettings(requestContext: RequestContext): ToolkitSettings {
     return readToolkitSettings(requestContext, TOOLKIT_ID, '微信渠道', []);
@@ -35,20 +59,20 @@ export class WechatAdminService {
    * 消息全文等于管理员密钥时提权，返回系统提示（密钥不回传给模型）。
    * ttlHours: 0 / permanent = 永久；未传默认 24 小时。
    */
-  tryElevate(input: {
+  async tryElevate(input: {
     accountId: string;
     peerWxid: string;
     message: string;
     adminSecret?: string;
     ttlHours?: number | string;
-  }): string | null {
+  }): Promise<string | null> {
     const secret = input.adminSecret?.trim() || '';
     const message = input.message.trim();
     if (!secret || !message || !safeEqual(secret, message)) {
       return null;
     }
     const permanent = isPermanentTtl(input.ttlHours);
-    this.grant(input.accountId, input.peerWxid, input.ttlHours);
+    await this.grant(input.accountId, input.peerWxid, input.ttlHours);
     this.logger.log(
       `管理员已提权 account=${input.accountId} peer=${input.peerWxid} ttl=${
         permanent ? 'permanent' : `${normalizeTtlHours(input.ttlHours)}h`
@@ -56,7 +80,7 @@ export class WechatAdminService {
     );
     if (permanent) {
       return (
-        '[系统] 管理员身份已确认（永久有效，进程重启前一直有效）。' +
+        '[系统] 管理员身份已确认（永久有效，直至重新配置密钥或撤销）。' +
         '此后可使用发朋友圈、通过好友、备注、拉群、群公告、查通讯录等管理员工具。'
       );
     }
@@ -67,7 +91,7 @@ export class WechatAdminService {
     );
   }
 
-  elevateFromRequestContext(input: {
+  async elevateFromRequestContext(input: {
     requestContext: RequestContext;
     accountId: string;
     peerWxid: string;
@@ -85,7 +109,7 @@ export class WechatAdminService {
     }
     const ttlRaw = settings.adminTtlHours;
     const permanent = isPermanentTtl(ttlRaw);
-    this.grant(input.accountId, input.peerWxid, ttlRaw);
+    await this.grant(input.accountId, input.peerWxid, ttlRaw);
     return {
       success: true as const,
       permanent,
@@ -93,42 +117,79 @@ export class WechatAdminService {
     };
   }
 
-  grant(
+  async grant(
     accountId: string,
     peerWxid: string,
     ttlHours: number | string | undefined = DEFAULT_TTL_HOURS,
   ) {
-    const expiresAt = isPermanentTtl(ttlHours)
+    const permanent = isPermanentTtl(ttlHours);
+    const expiresAtMs = permanent
       ? PERMANENT_EXPIRES_AT
       : Date.now() + normalizeTtlHours(ttlHours) * 3_600_000;
+    const expiresAt = permanent ? null : new Date(expiresAtMs);
+
     this.grants.set(this.key(accountId, peerWxid), {
       accountId,
       peerWxid,
-      expiresAt,
+      expiresAt: expiresAtMs,
+    });
+
+    await this.prisma.wechatAdminGrant.upsert({
+      where: {
+        accountId_peerWxid: { accountId, peerWxid },
+      },
+      create: { accountId, peerWxid, expiresAt },
+      update: { expiresAt },
     });
   }
 
-  isAdmin(accountId: string, peerWxid: string): boolean {
-    const grant = this.grants.get(this.key(accountId, peerWxid));
-    if (!grant) return false;
-    if (grant.expiresAt !== PERMANENT_EXPIRES_AT && grant.expiresAt <= Date.now()) {
-      this.grants.delete(this.key(accountId, peerWxid));
+  async isAdmin(accountId: string, peerWxid: string): Promise<boolean> {
+    const k = this.key(accountId, peerWxid);
+    let grant = this.grants.get(k);
+
+    if (!grant) {
+      const row = await this.prisma.wechatAdminGrant.findUnique({
+        where: { accountId_peerWxid: { accountId, peerWxid } },
+      });
+      if (!row) return false;
+      grant = {
+        accountId,
+        peerWxid,
+        expiresAt: row.expiresAt
+          ? row.expiresAt.getTime()
+          : PERMANENT_EXPIRES_AT,
+      };
+      this.grants.set(k, grant);
+    }
+
+    if (
+      grant.expiresAt !== PERMANENT_EXPIRES_AT &&
+      grant.expiresAt <= Date.now()
+    ) {
+      this.grants.delete(k);
+      await this.prisma.wechatAdminGrant
+        .delete({
+          where: { accountId_peerWxid: { accountId, peerWxid } },
+        })
+        .catch(() => undefined);
       return false;
     }
     return true;
   }
 
-  requireAdmin(accountId: string, peerWxid: string) {
-    if (!this.isAdmin(accountId, peerWxid)) {
+  async requireAdmin(accountId: string, peerWxid: string) {
+    if (!(await this.isAdmin(accountId, peerWxid))) {
       throw new Error(
         '需要管理员权限：请先在私聊中发送工具包配置的管理员密钥完成认证',
       );
     }
   }
 
-  listActiveAdminPeers(accountId: string): string[] {
+  async listActiveAdminPeers(accountId: string): Promise<string[]> {
     const now = Date.now();
     const peers: string[] = [];
+
+    // 先清内存过期
     for (const [key, grant] of this.grants) {
       if (!key.startsWith(`${accountId}:`)) continue;
       if (
@@ -136,9 +197,25 @@ export class WechatAdminService {
         grant.expiresAt <= now
       ) {
         this.grants.delete(key);
-        continue;
       }
-      peers.push(grant.peerWxid);
+    }
+
+    const rows = await this.prisma.wechatAdminGrant.findMany({
+      where: {
+        accountId,
+        OR: [{ expiresAt: null }, { expiresAt: { gt: new Date(now) } }],
+      },
+    });
+
+    for (const row of rows) {
+      this.grants.set(this.key(row.accountId, row.peerWxid), {
+        accountId: row.accountId,
+        peerWxid: row.peerWxid,
+        expiresAt: row.expiresAt
+          ? row.expiresAt.getTime()
+          : PERMANENT_EXPIRES_AT,
+      });
+      peers.push(row.peerWxid);
     }
     return peers;
   }

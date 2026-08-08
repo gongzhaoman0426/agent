@@ -131,6 +131,7 @@ export class WechatAccountService {
     proxy: string;
     deviceWay: string;
     enabled: boolean;
+    autoReplyPaused?: boolean;
     createdAt: Date;
     updatedAt: Date;
   }) {
@@ -143,6 +144,7 @@ export class WechatAccountService {
       proxy: row.proxy,
       deviceWay: row.deviceWay,
       enabled: row.enabled,
+      autoReplyPaused: Boolean(row.autoReplyPaused),
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };

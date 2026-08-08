@@ -16,6 +16,7 @@ import { mapStreamChunk, type SseChunk } from '../common/sse.js';
 import { MastraService } from '../mastra/mastra.service.js';
 import { ToolkitService } from '../toolkit/toolkit.service.js';
 import { REQUEST_CONTEXT_KEYS } from '../toolkit/toolkit.types.js';
+import { WECHAT_CHANNEL_SYSTEM_PROMPT } from '../common/channel-prompts.js';
 import { AgentRegistryService } from './agent-registry.service.js';
 import type { ChatDto } from './agent.types.js';
 
@@ -61,6 +62,9 @@ export class ChatService {
     const stream = await instance.stream(dto.message, {
       memory: { thread: threadId, resource: resourceId },
       requestContext,
+      ...(dto.channel === 'wechat'
+        ? { system: WECHAT_CHANNEL_SYSTEM_PROMPT }
+        : {}),
     });
 
     let responseText = '';
@@ -137,6 +141,9 @@ export class ChatService {
         ...(hideUserMessage ? { options: { readOnly: true } } : {}),
       },
       requestContext,
+      ...(dto.channel === 'wechat'
+        ? { system: WECHAT_CHANNEL_SYSTEM_PROMPT }
+        : {}),
     });
 
     if (hideUserMessage) {
