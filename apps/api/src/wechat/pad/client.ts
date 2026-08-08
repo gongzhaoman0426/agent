@@ -22,6 +22,11 @@ export async function padRequest<T>(
     body?: unknown;
     timeoutMs?: number;
     abortSignal?: AbortSignal;
+    /**
+     * 是否检查 Data 内业务 ret（baseResponse.ret / spamTips / tenpayErr…）。
+     * 默认 true：v875 常 Code=200 但内部已失败。
+     */
+    assertBusiness?: boolean;
   },
 ): Promise<T> {
   const base = getPadBaseUrl();
@@ -57,5 +62,115 @@ export async function padRequest<T>(
       dto.Data,
     );
   }
+
+  if (options?.assertBusiness !== false) {
+    assertPadBusinessOk(dto.Data, path);
+  }
   return dto.Data;
+}
+
+/** 解析微信错误 XML / errMsg 对象中的可读文案 */
+export function extractPadErrText(errMsg: unknown): string {
+  if (!errMsg) return '';
+  if (typeof errMsg === 'string') {
+    const cdata = errMsg.match(/<Content><!\[CDATA\[([\s\S]*?)\]\]><\/Content>/i);
+    if (cdata?.[1]) return cdata[1].trim();
+    return errMsg.trim();
+  }
+  if (typeof errMsg === 'object') {
+    const obj = errMsg as Record<string, unknown>;
+    if (typeof obj.str === 'string') return extractPadErrText(obj.str);
+    if (typeof obj.Str === 'string') return extractPadErrText(obj.Str);
+  }
+  return '';
+}
+
+/**
+ * v875 常见：外层 Code=200，内层 baseResponse.ret≠0 / spamTips / tenpayErr。
+ * 发消息接口 Data 常为数组，失败在 item.resp / chat_send_ret_list.ret。
+ */
+export function assertPadBusinessOk(data: unknown, path: string) {
+  if (data == null) return;
+
+  if (Array.isArray(data)) {
+    for (const item of data) {
+      assertPadBusinessOk(item, path);
+    }
+    return;
+  }
+
+  if (typeof data !== 'object') return;
+
+  const root = data as Record<string, unknown>;
+
+  if (root.isSendSuccess === false) {
+    throw new PadApiError(`v875 ${path}: 发送失败`, undefined, data);
+  }
+
+  // 发消息：chat_send_ret_list[].ret（失败时可能是 uint32 的 -2 → 4294967294）
+  const sendList =
+    (root.chat_send_ret_list as unknown) ??
+    (root.chatSendRetList as unknown) ??
+    ((root.resp as Record<string, unknown> | undefined)?.chat_send_ret_list as
+      | unknown
+      | undefined);
+  if (Array.isArray(sendList)) {
+    for (const row of sendList) {
+      if (!row || typeof row !== 'object') continue;
+      const ret = Number((row as Record<string, unknown>).ret ?? 0);
+      if (ret !== 0) {
+        throw new PadApiError(
+          `v875 ${path}: 消息未送达（ret=${ret >>> 0}）`,
+          ret,
+          data,
+        );
+      }
+    }
+  }
+
+  const nodes: Record<string, unknown>[] = [root];
+  for (const key of ['ContactList', 'contactList', 'snsObject', 'resp']) {
+    const nested = root[key];
+    if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+      nodes.push(nested as Record<string, unknown>);
+    }
+  }
+
+  const spamTips =
+    typeof root.spamTips === 'string' ? root.spamTips.trim() : '';
+
+  for (const node of nodes) {
+    const br =
+      node.baseResponse ?? node.base_response ?? node.baseResp;
+    if (br && typeof br === 'object') {
+      const ret = Number((br as Record<string, unknown>).ret ?? 0);
+      if (ret !== 0) {
+        const msg =
+          spamTips ||
+          extractPadErrText((br as Record<string, unknown>).errMsg) ||
+          extractPadErrText((br as Record<string, unknown>).ErrMsg) ||
+          `业务 ret=${ret}`;
+        throw new PadApiError(`v875 ${path}: ${msg}`, ret, data);
+      }
+    }
+  }
+
+  if (spamTips) {
+    throw new PadApiError(`v875 ${path}: ${spamTips}`, undefined, data);
+  }
+
+  const tenpayType = Number(root.tenpayErrType ?? root.TenpayErrType ?? 0);
+  if (tenpayType !== 0) {
+    const msg =
+      String(root.tenpayErrMsg ?? root.TenpayErrMsg ?? '').trim() ||
+      `tenpayErrType=${tenpayType}`;
+    throw new PadApiError(`v875 ${path}: ${msg}`, tenpayType, data);
+  }
+
+  if (root.retCode != null && Number(root.retCode) !== 0) {
+    const msg =
+      String(root.errMsg ?? root.ErrMsg ?? '').trim() ||
+      `retCode=${root.retCode}`;
+    throw new PadApiError(`v875 ${path}: ${msg}`, Number(root.retCode), data);
+  }
 }

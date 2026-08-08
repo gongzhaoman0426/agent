@@ -167,7 +167,7 @@ function WechatPage() {
   return (
     <PageShell
       title="微信渠道"
-      subtitle="对接 wechat-v875（GetLoginQrCodeNewX）。私聊文本路由到智能体；图片/语音需挂载「微信媒体」工具包。"
+      subtitle="对接 wechat-v875。私聊路由到智能体；挂载「微信渠道」工具包可发图/语音/收转账，配置管理员密钥后可用朋友圈与好友/群管理。"
     >
       <div className="mx-auto max-w-3xl space-y-8">
         <section className="rounded-xl border border-border bg-card p-5">

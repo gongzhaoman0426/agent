@@ -77,6 +77,7 @@ export async function httpSyncMsg(
     body: { Count: count },
     timeoutMs: 90_000,
     abortSignal,
+    assertBusiness: false,
   });
   return parseSyncMessages(data);
 }
@@ -94,6 +95,7 @@ export async function getRedisSyncMsg(
     body: {},
     timeoutMs: 60_000,
     abortSignal,
+    assertBusiness: false,
   });
   return parseSyncMessages(data);
 }

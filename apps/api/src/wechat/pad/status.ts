@@ -14,6 +14,7 @@ export async function getPadOnlineStatus(
     const data = await padRequest<unknown>('GET', '/login/GetLoginStatus', {
       key: authKey,
       timeoutMs: 15_000,
+      assertBusiness: false,
     });
     return { online: true, message: '在线', raw: data };
   } catch (error) {

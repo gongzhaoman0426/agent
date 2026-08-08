@@ -14,6 +14,7 @@ export async function genAuthKey(days = 30): Promise<string> {
     {
       key: getPadAdminKey(),
       body: { Count: 1, Days: days },
+      assertBusiness: false,
     },
   );
   const key = Array.isArray(data) ? data[0] : undefined;
@@ -44,6 +45,7 @@ export async function getLoginQrCodeNewX(input: {
   return padRequest<LoginQrData>('POST', '/login/GetLoginQrCodeNewX', {
     key: input.authKey,
     body,
+    assertBusiness: false,
   });
 }
 
@@ -53,6 +55,7 @@ export async function checkLoginStatus(
 ): Promise<CheckLoginStatusData> {
   return padRequest<CheckLoginStatusData>('GET', '/login/CheckLoginStatus', {
     key: authKey,
+    assertBusiness: false,
   });
 }
 
@@ -64,6 +67,7 @@ export async function verifyPhoneCode(
   return padRequest('POST', '/login/VerifiPhoneCode', {
     key: authKey,
     body: { VerifiCode: verifiCode.trim() },
+    assertBusiness: false,
   });
 }
 
@@ -78,6 +82,7 @@ export async function wakeUpLogin(input: {
       Check: false,
       Proxy: input.proxy?.trim() || '',
     },
+    assertBusiness: false,
   });
 }
 
