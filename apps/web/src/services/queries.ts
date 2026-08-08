@@ -409,7 +409,8 @@ export function useWechatAccounts() {
 
 export function useStartWechatLogin() {
   return useMutation({
-    mutationFn: () => api.post<WechatLoginStart>('/wechat/login/start'),
+    mutationFn: (body: { agentId: string; proxy?: string; way?: string }) =>
+      api.post<WechatLoginStart>('/wechat/login/start', body),
   });
 }
 
@@ -423,16 +424,11 @@ export function useWechatLoginStatus(sessionKey: string | null) {
     enabled: Boolean(sessionKey),
     refetchInterval: (query) => {
       const status = query.state.data?.status;
-      if (
-        !sessionKey ||
-        status === 'done' ||
-        status === 'none' ||
-        status === 'confirmed' ||
-        status === 'binded_redirect' ||
-        status === 'verify_code_blocked'
-      ) {
+      // confirming/confirmed 持续轮询直到前端 clear sessionKey；none/error 停止
+      if (!sessionKey || status === 'none' || status === 'error') {
         return false;
       }
+      if (status === 'confirming' || status === 'confirmed') return 2_000;
       return 2_000;
     },
   });
@@ -441,24 +437,17 @@ export function useWechatLoginStatus(sessionKey: string | null) {
 export function useConfirmWechatBind() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (body: {
-      defaultAgentId: string;
-      accountId: string;
-      token: string;
-      baseUrl?: string;
-    }) => api.post<WechatAccount>('/wechat/login/confirm', body),
+    mutationFn: (body: { sessionKey: string }) =>
+      api.post<WechatAccount>('/wechat/login/confirm', body),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.wechatAccounts }),
   });
 }
 
-export function useSubmitWechatVerifyCode() {
+export function useVerifyWechatPhone() {
   return useMutation({
     mutationFn: (body: { sessionKey: string; code: string }) =>
-      api.post<{ ok: boolean; message: string }>(
-        '/wechat/login/verify-code',
-        body,
-      ),
+      api.post<WechatLoginStatus>('/wechat/login/verify-phone', body),
   });
 }
 
@@ -470,7 +459,7 @@ export function useUpdateWechatAccount() {
       ...body
     }: {
       id: string;
-      defaultAgentId?: string;
+      agentId?: string;
       enabled?: boolean;
     }) => api.patch<WechatAccount>(`/wechat/accounts/${id}`, body),
     onSuccess: () =>

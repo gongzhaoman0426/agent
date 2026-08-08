@@ -145,9 +145,11 @@ export interface SessionDetail extends ChatSession {
 export interface WechatAccount {
   id: string;
   userId: string;
-  accountId: string;
-  baseUrl: string;
-  defaultAgentId: string;
+  agentId: string;
+  wxid: string;
+  nickname: string;
+  proxy: string;
+  deviceWay: string;
   enabled: boolean;
   createdAt: string;
   updatedAt: string;
@@ -162,13 +164,11 @@ export interface WechatLoginStart {
 export interface WechatLoginStatus {
   status: string;
   qrcodeUrl?: string;
-  needVerifyCode?: boolean;
   connected?: boolean;
-  alreadyConnected?: boolean;
-  botToken?: string;
-  accountId?: string;
-  baseUrl?: string;
-  scannerUserId?: string;
+  wxid?: string;
+  nickname?: string;
+  verificationUrl?: string;
+  needsPhoneCode?: boolean;
   message: string;
 }
 

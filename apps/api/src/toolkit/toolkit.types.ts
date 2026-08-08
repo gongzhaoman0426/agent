@@ -43,12 +43,17 @@ export const REQUEST_CONTEXT_KEYS = {
    */
   channel: 'channel',
   /**
-   * 渠道附加元数据（如微信 peerUserId / accountId / contextToken），
+   * 渠道附加元数据（如微信 accountId / peerWxid / agentId），
    * 创建定时任务时一并落库，供到期回传使用。
    */
   channelMeta: 'channelMeta',
   /** Record<toolkitId, ToolkitSettings> */
   toolkitSettings: 'toolkitSettings',
+  /**
+   * 微信媒体工具（语音/图片）已直接送达对端时置 true，
+   * 渠道层应跳过本轮文本自动回复，避免「语音 + 文字」双发。
+   */
+  wechatMediaDelivered: 'wechatMediaDelivered',
 } as const;
 
 /** 已支持的对话 / 回传渠道 */

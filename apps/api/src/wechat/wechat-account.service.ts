@@ -3,16 +3,8 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
-import type { Prisma } from '@prisma/client';
 import { AgentService } from '../agent/agent.service.js';
 import { PrismaService } from '../prisma/prisma.service.js';
-import { DEFAULT_ILINK_BASE_URL } from './ilink/api.js';
-
-export type PeerContextEntry = {
-  contextToken?: string;
-};
-
-export type PeerContextMap = Record<string, PeerContextEntry>;
 
 @Injectable()
 export class WechatAccountService {
@@ -21,9 +13,12 @@ export class WechatAccountService {
     private readonly agentService: AgentService,
   ) {}
 
-  async list(userId: string) {
+  async list(userId: string, agentId?: string) {
     const rows = await this.prisma.wechatAccount.findMany({
-      where: { userId },
+      where: {
+        userId,
+        ...(agentId ? { agentId } : {}),
+      },
       orderBy: { updatedAt: 'desc' },
     });
     return rows.map((row) => this.toPublic(row));
@@ -35,12 +30,12 @@ export class WechatAccountService {
     });
   }
 
-  async findByAccountId(accountId: string) {
-    return this.prisma.wechatAccount.findUnique({ where: { accountId } });
-  }
-
   async findById(id: string) {
     return this.prisma.wechatAccount.findUnique({ where: { id } });
+  }
+
+  async findByAuthKey(authKey: string) {
+    return this.prisma.wechatAccount.findUnique({ where: { authKey } });
   }
 
   async findOwned(id: string, userId: string) {
@@ -53,33 +48,49 @@ export class WechatAccountService {
     return row;
   }
 
-  async upsertFromLogin(input: {
+  async createFromLogin(input: {
     userId: string;
-    accountId: string;
-    token: string;
-    baseUrl?: string;
-    defaultAgentId: string;
+    agentId: string;
+    authKey: string;
+    wxid: string;
+    nickname?: string;
+    proxy?: string;
+    deviceWay?: string;
   }) {
-    if (!input.token.trim()) {
-      throw new BadRequestException('缺少 bot token');
+    await this.agentService.findOwned(input.agentId, input.userId);
+
+    const authKey = input.authKey.trim();
+    const wxid = input.wxid.trim();
+    if (!authKey || !wxid) {
+      throw new BadRequestException('缺少 authKey 或 wxid');
     }
-    await this.agentService.findOwned(input.defaultAgentId, input.userId);
+
+    const existingWxid = await this.prisma.wechatAccount.findUnique({
+      where: { wxid },
+    });
+    if (existingWxid && existingWxid.userId !== input.userId) {
+      throw new BadRequestException('该微信号已被其他用户绑定');
+    }
 
     const row = await this.prisma.wechatAccount.upsert({
-      where: { accountId: input.accountId },
+      where: { wxid },
       create: {
         userId: input.userId,
-        accountId: input.accountId,
-        token: input.token.trim(),
-        baseUrl: input.baseUrl?.trim() || DEFAULT_ILINK_BASE_URL,
-        defaultAgentId: input.defaultAgentId,
+        agentId: input.agentId,
+        authKey,
+        wxid,
+        nickname: input.nickname?.trim() || '',
+        proxy: input.proxy?.trim() || '',
+        deviceWay: input.deviceWay?.trim() || '',
         enabled: true,
       },
       update: {
         userId: input.userId,
-        token: input.token.trim(),
-        baseUrl: input.baseUrl?.trim() || DEFAULT_ILINK_BASE_URL,
-        defaultAgentId: input.defaultAgentId,
+        agentId: input.agentId,
+        authKey,
+        nickname: input.nickname?.trim() || '',
+        proxy: input.proxy?.trim() || '',
+        deviceWay: input.deviceWay?.trim() || '',
         enabled: true,
       },
     });
@@ -89,18 +100,16 @@ export class WechatAccountService {
   async update(
     id: string,
     userId: string,
-    patch: { defaultAgentId?: string; enabled?: boolean },
+    patch: { agentId?: string; enabled?: boolean },
   ) {
     await this.findOwned(id, userId);
-    if (patch.defaultAgentId) {
-      await this.agentService.findOwned(patch.defaultAgentId, userId);
+    if (patch.agentId) {
+      await this.agentService.findOwned(patch.agentId, userId);
     }
     const row = await this.prisma.wechatAccount.update({
       where: { id },
       data: {
-        ...(patch.defaultAgentId
-          ? { defaultAgentId: patch.defaultAgentId }
-          : {}),
+        ...(patch.agentId ? { agentId: patch.agentId } : {}),
         ...(patch.enabled !== undefined ? { enabled: patch.enabled } : {}),
       },
     });
@@ -113,41 +122,14 @@ export class WechatAccountService {
     return { success: true };
   }
 
-  getPeerContext(row: { peerContext: unknown }): PeerContextMap {
-    const raw = row.peerContext;
-    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
-    return raw as PeerContextMap;
-  }
-
-  async setPeerContextToken(
-    accountDbId: string,
-    peerUserId: string,
-    contextToken: string | undefined,
-  ) {
-    const row = await this.prisma.wechatAccount.findUnique({
-      where: { id: accountDbId },
-    });
-    if (!row) return;
-
-    const map = this.getPeerContext(row);
-    if (contextToken) {
-      map[peerUserId] = { contextToken };
-    } else {
-      delete map[peerUserId];
-    }
-
-    await this.prisma.wechatAccount.update({
-      where: { id: accountDbId },
-      data: { peerContext: map as Prisma.InputJsonValue },
-    });
-  }
-
   private toPublic(row: {
     id: string;
     userId: string;
-    accountId: string;
-    baseUrl: string;
-    defaultAgentId: string;
+    agentId: string;
+    wxid: string;
+    nickname: string;
+    proxy: string;
+    deviceWay: string;
     enabled: boolean;
     createdAt: Date;
     updatedAt: Date;
@@ -155,9 +137,11 @@ export class WechatAccountService {
     return {
       id: row.id,
       userId: row.userId,
-      accountId: row.accountId,
-      baseUrl: row.baseUrl,
-      defaultAgentId: row.defaultAgentId,
+      agentId: row.agentId,
+      wxid: row.wxid,
+      nickname: row.nickname,
+      proxy: row.proxy,
+      deviceWay: row.deviceWay,
       enabled: row.enabled,
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),

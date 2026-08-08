@@ -18,7 +18,7 @@ export interface ChannelDeliveryPayload {
 /**
  * 渠道侧「触达」通知（对话消息本身已由 ChatService 写入创建时的 session）。
  * - web：前端 inbox 轮询后 ack
- * - wechat：sendMessage 推送到对端
+ * - wechat：SendTextMessage 推送到对端
  */
 @Injectable()
 export class ChannelDeliveryService {
@@ -64,36 +64,22 @@ export class ChannelDeliveryService {
     }
 
     const meta = payload.channelMeta ?? {};
-    const peerUserId = String(meta.peerUserId ?? '');
-    const accountId = String(meta.accountId ?? '');
-    const accountDbId = String(meta.accountDbId ?? '');
-    const contextToken =
-      typeof meta.contextToken === 'string' ? meta.contextToken : undefined;
+    const peerWxid = String(meta.peerWxid ?? meta.peerUserId ?? '');
+    const accountDbId = String(meta.accountId ?? meta.accountDbId ?? '');
     const text = payload.response?.trim();
 
-    if (!text || !peerUserId) {
+    if (!text || !peerWxid || !accountDbId) {
       this.logger.warn(
-        `WeChat 投递缺少 peer/response，task=${payload.taskId}`,
+        `WeChat 投递缺少 account/peer/response，task=${payload.taskId}`,
       );
       return false;
     }
 
-    let ok = false;
-    if (accountDbId) {
-      ok = await this.wechatOutbound.sendByDbId({
-        accountDbId,
-        peerUserId,
-        text,
-        contextToken,
-      });
-    } else if (accountId) {
-      ok = await this.wechatOutbound.sendByIlinkAccountId({
-        accountId,
-        peerUserId,
-        text,
-        contextToken,
-      });
-    }
+    const ok = await this.wechatOutbound.sendByDbId({
+      accountDbId,
+      peerWxid,
+      text,
+    });
 
     if (!ok) {
       this.logger.warn(`WeChat 投递失败 task=${payload.taskId}`);

@@ -287,23 +287,25 @@ model ScheduledTask {
   @@map("scheduled_tasks")
 }
 
-// ============ 微信渠道账号（iLink 扫码绑定） ============
+// ============ 微信渠道账号（wechat-v874 个微协议） ============
 
 model WechatAccount {
-  id             String   @id @default(cuid())
-  userId         String
-  /** iLink bot id（ilink_bot_id） */
-  accountId      String   @unique
-  token          String
-  baseUrl        String   @default("https://ilinkai.weixin.qq.com")
-  /** 该微信号入站消息路由到的默认 Agent */
-  defaultAgentId String
-  /** peerUserId → { contextToken } */
-  peerContext    Json     @default("{}")
-  enabled        Boolean  @default(true)
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  id         String   @id @default(cuid())
+  userId     String
+  /** 入站消息路由到的 Agent（一 Agent 可绑多号） */
+  agentId    String
+  /** v874 AuthKey，全局唯一 */
+  authKey    String   @unique
+  /** 登录后的微信 ID */
+  wxid       String   @unique
+  nickname   String   @default("")
+  proxy      String   @default("")
+  deviceWay  String   @default("")
+  enabled    Boolean  @default(true)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@index([userId, enabled])
+  @@index([agentId, enabled])
   @@map("wechat_accounts")
 }

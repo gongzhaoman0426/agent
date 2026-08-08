@@ -23,7 +23,7 @@ const navSections = [
       { to: '/manage/skills', label: '技能', icon: Sparkles },
       { to: '/manage/toolkits', label: '插件工具', icon: Wrench },
       { to: '/manage/workflows', label: '工作流', icon: WorkflowIcon },
-      { to: '/manage/wechat', label: '微信渠道', icon: Smartphone },
+      { to: '/manage/wechat', label: '微信绑定', icon: Smartphone },
     ],
   },
 ] as const;

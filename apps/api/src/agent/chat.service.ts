@@ -143,13 +143,19 @@ export class ChatService {
       await this.persistAssistantOnly(result, threadId, resourceId);
     }
 
+    const mediaDelivered = Boolean(
+      requestContext.get(REQUEST_CONTEXT_KEYS.wechatMediaDelivered),
+    );
+
     return {
       agentId: agent.id,
       agentName: agent.name,
       sessionId: threadId,
       userMessage: dto.message,
       // 多 step（tool call）时 text 会拼上中间话术；渠道回传只要最后一步
-      response: extractFinalAssistantText(result),
+      // 微信语音/图片已送达时抑制文本，避免双发
+      response: mediaDelivered ? '' : extractFinalAssistantText(result),
+      skipTextReply: mediaDelivered,
       timestamp: new Date().toISOString(),
     };
   }
