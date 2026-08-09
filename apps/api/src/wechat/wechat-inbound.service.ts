@@ -5,6 +5,12 @@ import { ChatService } from '../agent/chat.service.js';
 import { ToolkitService } from '../toolkit/toolkit.service.js';
 import type { ToolkitSettings } from '../toolkit/toolkit.types.js';
 import type { ParsedPadMessage } from './pad/types.js';
+import {
+  isBotMentioned,
+  isChatroomId,
+  parseGroupTextContent,
+  stripAtMentions,
+} from './pad/group-mention.js';
 import { WechatAccountService } from './wechat-account.service.js';
 import { WechatAdminService } from './wechat-admin.service.js';
 import { WechatFriendRequestService } from './wechat-friend-request.service.js';
@@ -66,10 +72,16 @@ export class WechatInboundService {
     if (!peerWxid) return;
 
     if (peerWxid === row.wxid) return;
-    if (peerWxid.includes('@chatroom')) return;
     if (peerWxid === 'newsapp' || peerWxid === FILE_HELPER) return;
     if (peerWxid.endsWith('@app') || peerWxid.startsWith('gh_')) return;
-    if (msg.toWxid.includes('@chatroom')) return;
+
+    // 群聊：未 @ 也写入会话上下文；被 @ 时再自动回复
+    if (isChatroomId(peerWxid)) {
+      await this.handleGroupMessage(row, msg, peerWxid);
+      return;
+    }
+    // 自己发出的群消息回执等
+    if (isChatroomId(msg.toWxid)) return;
 
     this.replyGate.hydrateFromRow(row.id, row.autoReplyPaused);
     if (this.replyGate.isPaused(row.id)) {
@@ -143,6 +155,97 @@ export class WechatInboundService {
     await this.runAgentReply(row, peerWxid, text);
   }
 
+  /**
+   * 群聊文本：
+   * - 未 @：写入该群会话记忆，供后续被 @ 时作为上下文
+   * - 已 @：走模型回复（本条由 chat 落库，不再重复 append）
+   */
+  private async handleGroupMessage(
+    row: WechatAccount,
+    msg: ParsedPadMessage,
+    roomWxid: string,
+  ): Promise<void> {
+    if (msg.msgType !== TEXT_MSG_TYPE) {
+      this.logger.debug(
+        `忽略非文本群消息 type=${msg.msgType} room=${roomWxid}`,
+      );
+      return;
+    }
+
+    const { senderWxid, body } = parseGroupTextContent(msg.content);
+    if (senderWxid && senderWxid === row.wxid) return;
+
+    const bodyText = body.trim();
+    if (!bodyText) return;
+
+    const mentioned = isBotMentioned({
+      botWxid: row.wxid,
+      botNickname: row.nickname,
+      msgSource: msg.msgSource,
+      pushContent: msg.pushContent,
+      beAtUser: msg.beAtUser,
+      contentBody: bodyText,
+    });
+
+    if (!mentioned) {
+      await this.appendGroupContext(row, roomWxid, senderWxid, bodyText);
+      return;
+    }
+
+    this.replyGate.hydrateFromRow(row.id, row.autoReplyPaused);
+    if (this.replyGate.isPaused(row.id)) {
+      // 暂停回复时仍记下 @ 内容，恢复后可见
+      await this.appendGroupContext(row, roomWxid, senderWxid, bodyText);
+      this.logger.debug(
+        `自动回复已暂停，忽略群@ account=${row.id} room=${roomWxid}`,
+      );
+      return;
+    }
+
+    let text = stripAtMentions(bodyText, [row.nickname]);
+    if (!text) text = '你好';
+    const prompt = `[群聊@消息 发送者:${senderWxid || '未知'}]\n${text}`;
+    this.logger.log(
+      `收到群@ wxid=${row.wxid} room=${roomWxid} from=${senderWxid || '?'} text=${text.slice(0, 80)}`,
+    );
+    await this.runAgentReply(
+      row,
+      roomWxid,
+      prompt,
+      `微信群 ${roomWxid}`,
+      senderWxid || undefined,
+    );
+  }
+
+  /** 旁路群消息写入群会话，不触发回复 */
+  private async appendGroupContext(
+    row: WechatAccount,
+    roomWxid: string,
+    senderWxid: string,
+    body: string,
+  ): Promise<void> {
+    try {
+      const agent = await this.agentService.findOwned(row.agentId, row.userId);
+      const sessionId = buildWechatSessionId(row.agentId, row.id, roomWxid);
+      const text = `[群消息 发送者:${senderWxid || '未知'}]\n${body}`;
+      await this.chatService.appendUserMessage(agent, {
+        sessionId,
+        userId: row.userId,
+        text,
+        threadTitle: `微信群 ${roomWxid}`,
+      });
+      this.logger.debug(
+        `群上下文已写入 room=${roomWxid} from=${senderWxid || '?'} len=${body.length}`,
+      );
+    } catch (error) {
+      this.logger.warn(
+        `写入群上下文失败 room=${roomWxid}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
   private async handleReplyGateCommand(
     row: WechatAccount,
     command: 'pause' | 'resume',
@@ -197,6 +300,9 @@ export class WechatInboundService {
     row: WechatAccount,
     peerWxid: string,
     text: string,
+    threadTitle?: string,
+    /** 群聊发言人；私聊勿传（默认即对端） */
+    senderWxid?: string,
   ) {
     const sessionId = buildWechatSessionId(row.agentId, row.id, peerWxid);
 
@@ -215,12 +321,14 @@ export class WechatInboundService {
         },
         row.userId,
         {
+          threadTitle,
           channelMeta: {
             accountId: row.id,
             agentId: row.agentId,
             peerWxid,
             accountDbId: row.id,
             peerUserId: peerWxid,
+            ...(senderWxid ? { senderWxid } : {}),
           },
         },
       );
@@ -274,11 +382,15 @@ export class WechatInboundService {
       return { ok: false, reason: 'unknown_or_disabled_account' };
     }
 
+    const pushContent = String(body.pushContent ?? '').trim();
+    const beAtUser = String(body.beAtUser ?? '').trim();
     const msg: ParsedPadMessage = {
       fromWxid: String(body.FromUserName ?? ''),
       toWxid: String(body.ToUserName ?? ''),
       msgType: Number(body.msgType ?? 0),
       content: String(body.msgContent ?? ''),
+      ...(pushContent ? { pushContent } : {}),
+      ...(beAtUser ? { beAtUser } : {}),
     };
 
     await this.handleParsed(row, msg);

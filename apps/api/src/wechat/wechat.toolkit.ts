@@ -22,7 +22,7 @@ const settingsFields: SettingField[] = [
     key: 'adminSecret',
     label: '管理员密钥',
     description:
-      '在微信私聊中发送与此完全相同的密钥即可提权；发朋友圈/好友/群等管理工具仅管理员可用',
+      '在微信私聊中发送与此完全相同的密钥即可提权（按个人 wxid）；群里被 @ 时按发言人鉴权，仅已提权者可调管理工具',
     placeholder: '设置一个不易猜测的口令',
     required: true,
     secret: true,
@@ -39,7 +39,10 @@ const settingsFields: SettingField[] = [
 
 function requireWechatChannelMeta(requestContext: RequestContext): {
   accountId: string;
+  /** 当前会话对端：私聊=对方 wxid，群聊=群 ID（回复发往此处） */
   peerWxid: string;
+  /** 权限主体：私聊=对方；群聊=发言人 wxid（管理员提权/鉴权用这个） */
+  actorWxid: string;
   agentId: string;
 } {
   const channel = requestContext.get(REQUEST_CONTEXT_KEYS.channel);
@@ -60,15 +63,19 @@ function requireWechatChannelMeta(requestContext: RequestContext): {
   if (!accountId || !peerWxid) {
     throw new Error('缺少微信会话上下文（accountId / peerWxid）');
   }
+  const actorWxid = String(meta?.senderWxid ?? meta?.actorWxid ?? peerWxid).trim();
+  if (!actorWxid) {
+    throw new Error('缺少微信操作者上下文（senderWxid）');
+  }
 
-  return { accountId, peerWxid, agentId };
+  return { accountId, peerWxid, actorWxid, agentId };
 }
 
 @toolkitId(TOOLKIT_ID)
 export class WechatToolkit implements ToolkitDefinition {
   readonly name = '微信渠道';
   readonly description =
-    '微信私聊渠道：发图/语音/收转账；管理员密钥提权后可用向指定好友发文本/语音/图片、发朋友圈、通过好友、备注、拉群、群公告、查通讯录等。可配合定时任务做主动触达运营。向文件传输助手发送「暂停」/「恢复」可开关整号自动回复（状态会持久化）。';
+    '微信渠道：发图/语音/收转账；管理员密钥提权后可用向指定好友发文本/语音/图片、发朋友圈、通过好友、备注、拉群、群公告、查通讯录等。群聊按发言人鉴权（须先在私聊提权）。可配合定时任务做主动触达运营。向文件传输助手发送「暂停」/「恢复」可开关整号自动回复（状态会持久化）。';
   readonly settingsFields = settingsFields;
   readonly tools: ToolsInput;
 
@@ -147,7 +154,7 @@ export class WechatToolkit implements ToolkitDefinition {
       wechat_admin_auth: createTool({
         id: 'wechat-admin-auth',
         description:
-          '使用管理员密钥为当前微信会话提权。一般用户直接发送密钥即可自动提权；也可调用本工具并传入 secret。',
+          '使用管理员密钥为当前发言人提权（私聊=对端，群聊=发言人）。一般在私聊直接发送密钥即可；也可调用本工具并传入 secret。',
         inputSchema: z.object({
           secret: z.string().min(1).describe('管理员密钥'),
         }),
@@ -156,7 +163,7 @@ export class WechatToolkit implements ToolkitDefinition {
           return this.admin.elevateFromRequestContext({
             requestContext,
             accountId: ctx.accountId,
-            peerWxid: ctx.peerWxid,
+            peerWxid: ctx.actorWxid,
             secret: input.secret,
           });
         },
@@ -191,7 +198,7 @@ export class WechatToolkit implements ToolkitDefinition {
           return this.adminOps.sendToUser({
             accountId: ctx.accountId,
             agentId: ctx.agentId,
-            peerWxid: ctx.peerWxid,
+            peerWxid: ctx.actorWxid,
             toWxid: input.toWxid,
             type: input.type,
             text: input.text,
@@ -217,7 +224,7 @@ export class WechatToolkit implements ToolkitDefinition {
           return this.adminOps.postMoment({
             accountId: ctx.accountId,
             agentId: ctx.agentId,
-            peerWxid: ctx.peerWxid,
+            peerWxid: ctx.actorWxid,
             content: input.content,
             imageUrls: input.imageUrls,
           });
@@ -236,7 +243,7 @@ export class WechatToolkit implements ToolkitDefinition {
         }),
         execute: async (input, { requestContext }) => {
           const ctx = requireWechatChannelMeta(requestContext);
-          await this.admin.requireAdmin(ctx.accountId, ctx.peerWxid);
+          await this.admin.requireAdmin(ctx.accountId, ctx.actorWxid);
           return this.friendRequests.agree({
             accountId: ctx.accountId,
             agentId: ctx.agentId,
@@ -257,7 +264,7 @@ export class WechatToolkit implements ToolkitDefinition {
           return this.adminOps.setRemark({
             accountId: ctx.accountId,
             agentId: ctx.agentId,
-            peerWxid: ctx.peerWxid,
+            peerWxid: ctx.actorWxid,
             userName: input.userName,
             remarkName: input.remarkName,
           });
@@ -281,7 +288,7 @@ export class WechatToolkit implements ToolkitDefinition {
           return this.adminOps.createGroup({
             accountId: ctx.accountId,
             agentId: ctx.agentId,
-            peerWxid: ctx.peerWxid,
+            peerWxid: ctx.actorWxid,
             topic: input.topic,
             userList: input.userList,
           });
@@ -305,7 +312,7 @@ export class WechatToolkit implements ToolkitDefinition {
           return this.adminOps.inviteToGroup({
             accountId: ctx.accountId,
             agentId: ctx.agentId,
-            peerWxid: ctx.peerWxid,
+            peerWxid: ctx.actorWxid,
             chatRoomName: input.chatRoomName,
             userList: input.userList,
             mode: input.mode,
@@ -325,7 +332,7 @@ export class WechatToolkit implements ToolkitDefinition {
           return this.adminOps.setGroupAnnouncement({
             accountId: ctx.accountId,
             agentId: ctx.agentId,
-            peerWxid: ctx.peerWxid,
+            peerWxid: ctx.actorWxid,
             chatRoomName: input.chatRoomName,
             content: input.content,
           });
@@ -350,7 +357,7 @@ export class WechatToolkit implements ToolkitDefinition {
           return this.adminOps.listContacts({
             accountId: ctx.accountId,
             agentId: ctx.agentId,
-            peerWxid: ctx.peerWxid,
+            peerWxid: ctx.actorWxid,
             limit: input.limit,
           });
         },
@@ -371,7 +378,7 @@ export class WechatToolkit implements ToolkitDefinition {
           return this.adminOps.searchFriend({
             accountId: ctx.accountId,
             agentId: ctx.agentId,
-            peerWxid: ctx.peerWxid,
+            peerWxid: ctx.actorWxid,
             keyword: input.keyword,
           });
         },

@@ -65,6 +65,15 @@ export type PadAddMsg = {
   msgId?: number | string;
   new_msg_id?: number | string;
   newMsgId?: number | string;
+  /** 含 <atuserlist> 等，用于判断群 @ */
+  msg_source?: string;
+  msgSource?: string;
+  MsgSource?: string;
+  push_content?: string;
+  pushContent?: string;
+  PushContent?: string;
+  beAtUser?: string;
+  BeAtUser?: string;
 };
 
 export type ParsedPadMessage = {
@@ -73,4 +82,10 @@ export type ParsedPadMessage = {
   msgType: number;
   content: string;
   msgId?: string;
+  /** 原始 msgsource XML */
+  msgSource?: string;
+  /** 推送摘要，如「xxx在群聊中@了你」 */
+  pushContent?: string;
+  /** 被 @ 的 wxid（部分推送形态） */
+  beAtUser?: string;
 };

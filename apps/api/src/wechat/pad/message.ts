@@ -23,8 +23,24 @@ function normalizeAddMsg(msg: PadAddMsg): ParsedPadMessage | null {
   const msgIdRaw = msg.new_msg_id ?? msg.newMsgId ?? msg.msg_id ?? msg.msgId;
   const msgId =
     msgIdRaw === undefined || msgIdRaw === null ? undefined : String(msgIdRaw);
+  const msgSource = String(
+    msg.msg_source ?? msg.msgSource ?? msg.MsgSource ?? '',
+  ).trim();
+  const pushContent = String(
+    msg.push_content ?? msg.pushContent ?? msg.PushContent ?? '',
+  ).trim();
+  const beAtUser = String(msg.beAtUser ?? msg.BeAtUser ?? '').trim();
   if (!fromWxid) return null;
-  return { fromWxid, toWxid, msgType, content, msgId };
+  return {
+    fromWxid,
+    toWxid,
+    msgType,
+    content,
+    msgId,
+    ...(msgSource ? { msgSource } : {}),
+    ...(pushContent ? { pushContent } : {}),
+    ...(beAtUser ? { beAtUser } : {}),
+  };
 }
 
 /** 解析 HttpSyncMsg / GetRedisSyncMsg Data */

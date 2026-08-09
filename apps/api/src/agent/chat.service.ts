@@ -216,6 +216,43 @@ export class ChatService {
     await this.mastraService.memory.saveMessages({ messages: [fallback] });
   }
 
+  /**
+   * 只把用户侧上下文写入会话（不触发模型）。
+   * 用于群聊未 @ 的旁路消息：先积累上下文，等被 @ 时 generate 可读到近期群聊。
+   */
+  async appendUserMessage(
+    agent: AgentWithMounts,
+    input: {
+      sessionId: string;
+      userId: string;
+      text: string;
+      threadTitle?: string;
+    },
+  ): Promise<void> {
+    const text = input.text.trim();
+    if (!text) return;
+
+    const { threadId, resourceId } = await this.ensureThread(
+      input.sessionId,
+      input.userId,
+      agent,
+      input.threadTitle,
+    );
+
+    const message: MastraDBMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      createdAt: new Date(),
+      threadId,
+      resourceId,
+      content: {
+        format: 2,
+        parts: [{ type: 'text', text }],
+      },
+    };
+    await this.mastraService.memory.saveMessages({ messages: [message] });
+  }
+
   // ============ 会话管理（Mastra Memory 存储） ============
 
   async listAllSessions(userId: string) {

@@ -164,7 +164,7 @@ export class MastraService {
           }
         : {}),
       options: {
-        lastMessages: 10,
+        lastMessages: 20,
         // resource = `${userId}:${agentId}`，跨会话召回但不跨 Agent
         semanticRecall: semanticRecall
           ? { topK: 4, messageRange: 2, scope: 'resource' }
