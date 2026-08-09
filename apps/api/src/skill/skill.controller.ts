@@ -1,3 +1,4 @@
+import { Roles } from '../auth/auth.guard.js';
 import {
   BadRequestException,
   Body,
@@ -53,6 +54,7 @@ const assistantChatSchema = z.object({
   message: z.string().min(1, '消息不能为空'),
 });
 
+@Roles('builder')
 @Controller('skills')
 export class SkillController {
   private readonly logger = new Logger(SkillController.name);

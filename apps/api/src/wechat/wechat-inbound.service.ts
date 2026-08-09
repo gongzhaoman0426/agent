@@ -84,12 +84,7 @@ export class WechatInboundService {
     if (isChatroomId(msg.toWxid)) return;
 
     this.replyGate.hydrateFromRow(row.id, row.autoReplyPaused);
-    if (this.replyGate.isPaused(row.id)) {
-      this.logger.debug(
-        `自动回复已暂停，忽略私聊 account=${row.id} from=${peerWxid}`,
-      );
-      return;
-    }
+    const autoReplyPaused = this.replyGate.isPaused(row.id);
 
     // 好友请求：缓存后通知已提权管理员
     if (msg.msgType === VERIFY_MSG_TYPE) {
@@ -148,6 +143,15 @@ export class WechatInboundService {
     } else {
       this.logger.debug(
         `忽略非文本/转账/好友请求消息 type=${msg.msgType} from=${peerWxid}`,
+      );
+      return;
+    }
+
+    // 暂停自动回复时仍写入会话，便于运营台查看并人工回复
+    if (autoReplyPaused) {
+      await this.appendPrivateContext(row, peerWxid, text);
+      this.logger.debug(
+        `自动回复已暂停，私聊仅落库 account=${row.id} from=${peerWxid}`,
       );
       return;
     }
@@ -215,6 +219,30 @@ export class WechatInboundService {
       `微信群 ${roomWxid}`,
       senderWxid || undefined,
     );
+  }
+
+  /** 暂停自动回复时：私聊仍落库，不触发模型 */
+  private async appendPrivateContext(
+    row: WechatAccount,
+    peerWxid: string,
+    text: string,
+  ): Promise<void> {
+    try {
+      const agent = await this.agentService.findOwned(row.agentId, row.userId);
+      const sessionId = buildWechatSessionId(row.agentId, row.id, peerWxid);
+      await this.chatService.appendUserMessage(agent, {
+        sessionId,
+        userId: row.userId,
+        text,
+        threadTitle: `微信 ${peerWxid}`,
+      });
+    } catch (error) {
+      this.logger.warn(
+        `写入私聊上下文失败 peer=${peerWxid}: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
   }
 
   /** 旁路群消息写入群会话，不触发回复 */

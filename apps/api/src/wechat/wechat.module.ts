@@ -7,6 +7,7 @@ import { WechatAdminService } from './wechat-admin.service.js';
 import { WechatController } from './wechat.controller.js';
 import { WechatFriendRequestService } from './wechat-friend-request.service.js';
 import { WechatInboundService } from './wechat-inbound.service.js';
+import { WechatInboxService } from './wechat-inbox.service.js';
 import { WechatLoginService } from './wechat-login.service.js';
 import { WechatMonitorService } from './wechat-monitor.service.js';
 import { WechatOutboundService } from './wechat-outbound.service.js';
@@ -26,6 +27,7 @@ import { WechatTtsService } from './wechat-tts.service.js';
     WechatTransferService,
     WechatReplyGateService,
     WechatInboundService,
+    WechatInboxService,
     WechatLoginService,
     WechatMonitorService,
     WechatTtsService,

@@ -17,14 +17,21 @@ model User {
   image               String?
   username            String                @unique
   displayUsername     String?
+  /** builder=一类（搭建/绑号）；operator=二类（仅微信工作台） */
+  role                String                @default("builder")
+  /** 二类账号的创建者（一类用户 id） */
+  createdById         String?
   accounts            Account[]
   sessions            Session[]
   userToolkitSettings UserToolkitSettings[]
   userMcpServers      UserMcpServer[]
   skills              Skill[]
+  wechatOperatorGrants WechatAccountOperator[]
   createdAt           DateTime              @default(now())
   updatedAt           DateTime              @updatedAt
 
+  @@index([role])
+  @@index([createdById])
   @@map("users")
 }
 
@@ -312,10 +319,27 @@ model WechatAccount {
   updatedAt  DateTime @updatedAt
 
   adminGrants WechatAdminGrant[]
+  operators   WechatAccountOperator[]
 
   @@index([userId, enabled])
   @@index([agentId, enabled])
   @@map("wechat_accounts")
+}
+
+/** 一类用户把微信号授权给二类（运营）账号 */
+model WechatAccountOperator {
+  id        String   @id @default(cuid())
+  accountId String
+  userId    String
+  createdAt DateTime @default(now())
+
+  account WechatAccount @relation(fields: [accountId], references: [id], onDelete: Cascade)
+  user    User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([accountId, userId])
+  @@index([userId])
+  @@index([accountId])
+  @@map("wechat_account_operators")
 }
 
 /** 微信管理员提权（按账号 + 对端 wxid） */

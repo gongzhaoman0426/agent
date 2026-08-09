@@ -1,3 +1,4 @@
+import { Roles } from '../auth/auth.guard.js';
 import {
   BadRequestException,
   Body,
@@ -32,6 +33,7 @@ function parse<T extends z.ZodType>(schema: T, raw: unknown): z.infer<T> {
   return result.data as z.infer<T>;
 }
 
+@Roles('builder')
 @Controller('mcp-servers')
 export class McpController {
   constructor(private readonly mcpServers: McpServerService) {}

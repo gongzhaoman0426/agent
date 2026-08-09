@@ -1,6 +1,8 @@
+import { Roles } from '../auth/auth.guard.js';
 import { Body, Controller, Get, Param, Post } from '@nestjs/common';
 import { WorkflowService } from './workflow.service.js';
 
+@Roles('builder')
 @Controller('workflows')
 export class WorkflowController {
   constructor(private readonly workflowService: WorkflowService) {}

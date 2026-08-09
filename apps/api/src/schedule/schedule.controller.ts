@@ -1,3 +1,4 @@
+import { Roles } from '../auth/auth.guard.js';
 import {
   BadRequestException,
   Body,
@@ -15,6 +16,7 @@ const ackSchema = z.object({
   taskIds: z.array(z.string().min(1)).min(1).max(50),
 });
 
+@Roles('builder')
 @Controller('schedule')
 export class ScheduleController {
   constructor(private readonly scheduleService: ScheduleService) {}

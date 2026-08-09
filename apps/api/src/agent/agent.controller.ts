@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import type { Response } from 'express';
 import { writeSseStream } from '../common/sse.js';
+import { Roles } from '../auth/auth.guard.js';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import type { CurrentUserPayload } from '../auth/auth.guard.js';
 import { AgentService } from './agent.service.js';
@@ -19,6 +20,7 @@ import { ChatService } from './chat.service.js';
 import { chatSchema } from './agent.types.js';
 
 @Controller('agents')
+@Roles('builder')
 export class AgentController {
   private readonly logger = new Logger(AgentController.name);
 

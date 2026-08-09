@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
@@ -14,6 +15,24 @@ export class WechatAccountService {
   ) {}
 
   async list(userId: string, agentId?: string) {
+    const role = await this.getUserRole(userId);
+    if (role === 'operator') {
+      const grants = await this.prisma.wechatAccountOperator.findMany({
+        where: { userId },
+        select: { accountId: true },
+      });
+      const ids = grants.map((g) => g.accountId);
+      if (ids.length === 0) return [];
+      const rows = await this.prisma.wechatAccount.findMany({
+        where: {
+          id: { in: ids },
+          ...(agentId ? { agentId } : {}),
+        },
+        orderBy: { updatedAt: 'desc' },
+      });
+      return rows.map((row) => this.toPublic(row));
+    }
+
     const rows = await this.prisma.wechatAccount.findMany({
       where: {
         userId,
@@ -46,6 +65,37 @@ export class WechatAccountService {
       throw new NotFoundException('微信账号不存在');
     }
     return row;
+  }
+
+  /** 一类拥有者或已授权的二类运营均可访问 */
+  async findAccessible(id: string, userId: string) {
+    const row = await this.prisma.wechatAccount.findUnique({ where: { id } });
+    if (!row) {
+      throw new NotFoundException('微信账号不存在');
+    }
+    if (row.userId === userId) return row;
+    const grant = await this.prisma.wechatAccountOperator.findUnique({
+      where: { accountId_userId: { accountId: id, userId } },
+    });
+    if (!grant) {
+      throw new NotFoundException('微信账号不存在');
+    }
+    return row;
+  }
+
+  async requireBuilder(userId: string) {
+    const role = await this.getUserRole(userId);
+    if (role !== 'builder') {
+      throw new ForbiddenException('仅一类账号可绑定或管理微信号');
+    }
+  }
+
+  private async getUserRole(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { role: true },
+    });
+    return user?.role === 'operator' ? 'operator' : 'builder';
   }
 
   async createFromLogin(input: {
@@ -122,7 +172,7 @@ export class WechatAccountService {
     return { success: true };
   }
 
-  private toPublic(row: {
+  toPublic(row: {
     id: string;
     userId: string;
     agentId: string;

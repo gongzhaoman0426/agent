@@ -17,8 +17,12 @@ import type {
   Toolkit,
   UiMessage,
   WechatAccount,
+  WechatInboxList,
+  WechatInboxMessages,
   WechatLoginStart,
   WechatLoginStatus,
+  WechatPeerProfile,
+  OperatorAccount,
   Workflow,
 } from '@/types';
 
@@ -37,6 +41,12 @@ export const queryKeys = {
   skillAssistant: (name: string) => ['skills', name, 'assistant'] as const,
   scheduleInbox: ['schedule', 'inbox'] as const,
   wechatAccounts: ['wechat', 'accounts'] as const,
+  operators: ['operators'] as const,
+  wechatInbox: (accountId: string) => ['wechat', 'inbox', accountId] as const,
+  wechatInboxMessages: (accountId: string, peerWxid: string) =>
+    ['wechat', 'inbox', accountId, 'messages', peerWxid] as const,
+  wechatPeerProfile: (accountId: string, peerWxid: string) =>
+    ['wechat', 'peer', accountId, peerWxid] as const,
 };
 
 // ---- Agents ----
@@ -473,5 +483,143 @@ export function useDeleteWechatAccount() {
     mutationFn: (id: string) => api.delete(`/wechat/accounts/${id}`),
     onSuccess: () =>
       queryClient.invalidateQueries({ queryKey: queryKeys.wechatAccounts }),
+  });
+}
+
+export function useWechatInbox(accountId: string | null) {
+  return useQuery({
+    queryKey: queryKeys.wechatInbox(accountId ?? ''),
+    queryFn: () =>
+      api.get<WechatInboxList>(`/wechat/accounts/${accountId}/inbox`),
+    enabled: Boolean(accountId),
+    refetchInterval: 5_000,
+  });
+}
+
+export function useWechatInboxMessages(
+  accountId: string | null,
+  peerWxid: string | null,
+) {
+  return useQuery({
+    queryKey: queryKeys.wechatInboxMessages(accountId ?? '', peerWxid ?? ''),
+    queryFn: () =>
+      api.get<WechatInboxMessages>(
+        `/wechat/accounts/${accountId}/inbox/messages?peerWxid=${encodeURIComponent(peerWxid!)}`,
+      ),
+    enabled: Boolean(accountId && peerWxid),
+    refetchInterval: 3_000,
+  });
+}
+
+export function useWechatPeerProfile(
+  accountId: string | null,
+  peerWxid: string | null,
+) {
+  return useQuery({
+    queryKey: queryKeys.wechatPeerProfile(accountId ?? '', peerWxid ?? ''),
+    queryFn: () =>
+      api.get<WechatPeerProfile>(
+        `/wechat/accounts/${accountId}/peers/profile?peerWxid=${encodeURIComponent(peerWxid!)}`,
+      ),
+    enabled: Boolean(accountId && peerWxid),
+    staleTime: 60_000,
+  });
+}
+
+export function useSendWechatInboxMessage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      accountId: string;
+      peerWxid: string;
+      text: string;
+      splitSegments?: boolean;
+    }) =>
+      api.post<{ success: boolean; sessionId: string }>(
+        `/wechat/accounts/${body.accountId}/inbox/messages`,
+        {
+          peerWxid: body.peerWxid,
+          text: body.text,
+          splitSegments: body.splitSegments,
+        },
+      ),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.wechatInbox(variables.accountId),
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.wechatInboxMessages(
+          variables.accountId,
+          variables.peerWxid,
+        ),
+      });
+    },
+  });
+}
+
+export function useSetWechatAutoReply() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: { accountId: string; paused: boolean }) =>
+      api.post<{ id: string; autoReplyPaused: boolean }>(
+        `/wechat/accounts/${body.accountId}/auto-reply`,
+        { paused: body.paused },
+      ),
+    onSuccess: (_data, variables) => {
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.wechatAccounts,
+      });
+      void queryClient.invalidateQueries({
+        queryKey: queryKeys.wechatInbox(variables.accountId),
+      });
+    },
+  });
+}
+
+
+export function useOperators() {
+  return useQuery({
+    queryKey: queryKeys.operators,
+    queryFn: () => api.get<OperatorAccount[]>('/operators'),
+  });
+}
+
+export function useCreateOperator() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (body: {
+      username: string;
+      password: string;
+      name?: string;
+      accountIds: string[];
+    }) => api.post<OperatorAccount>('/operators', body),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.operators }),
+  });
+}
+
+export function useUpdateOperator() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...body
+    }: {
+      id: string;
+      name?: string;
+      password?: string;
+      accountIds?: string[];
+    }) => api.patch<OperatorAccount>(`/operators/${id}`, body),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.operators }),
+  });
+}
+
+export function useDeleteOperator() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/operators/${id}`),
+    onSuccess: () =>
+      queryClient.invalidateQueries({ queryKey: queryKeys.operators }),
   });
 }

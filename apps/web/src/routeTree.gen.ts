@@ -13,8 +13,10 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as AppRouteImport } from './routes/_app'
 import { Route as LoginRouteImport } from './routes/login'
 import { Route as AppChatRouteImport } from './routes/_app/chat'
+import { Route as AppWechatInboxRouteImport } from './routes/_app/wechat-inbox'
 import { Route as AppAgentsAgentIdRouteImport } from './routes/_app/agents.$agentId'
 import { Route as AppManageAgentsRouteImport } from './routes/_app/manage.agents'
+import { Route as AppManageOperatorsRouteImport } from './routes/_app/manage.operators'
 import { Route as AppManageSkillsRouteImport } from './routes/_app/manage.skills'
 import { Route as AppManageToolkitsRouteImport } from './routes/_app/manage.toolkits'
 import { Route as AppManageWechatRouteImport } from './routes/_app/manage.wechat'
@@ -40,6 +42,11 @@ const AppChatRoute = AppChatRouteImport.update({
   path: '/chat',
   getParentRoute: () => AppRoute,
 } as any)
+const AppWechatInboxRoute = AppWechatInboxRouteImport.update({
+  id: '/wechat-inbox',
+  path: '/wechat-inbox',
+  getParentRoute: () => AppRoute,
+} as any)
 const AppAgentsAgentIdRoute = AppAgentsAgentIdRouteImport.update({
   id: '/agents/$agentId',
   path: '/agents/$agentId',
@@ -48,6 +55,11 @@ const AppAgentsAgentIdRoute = AppAgentsAgentIdRouteImport.update({
 const AppManageAgentsRoute = AppManageAgentsRouteImport.update({
   id: '/manage/agents',
   path: '/manage/agents',
+  getParentRoute: () => AppRoute,
+} as any)
+const AppManageOperatorsRoute = AppManageOperatorsRouteImport.update({
+  id: '/manage/operators',
+  path: '/manage/operators',
   getParentRoute: () => AppRoute,
 } as any)
 const AppManageSkillsRoute = AppManageSkillsRouteImport.update({
@@ -80,8 +92,10 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/chat': typeof AppChatRoute
+  '/wechat-inbox': typeof AppWechatInboxRoute
   '/agents/$agentId': typeof AppAgentsAgentIdRoute
   '/manage/agents': typeof AppManageAgentsRoute
+  '/manage/operators': typeof AppManageOperatorsRoute
   '/manage/skills': typeof AppManageSkillsRoute
   '/manage/toolkits': typeof AppManageToolkitsRoute
   '/manage/wechat': typeof AppManageWechatRoute
@@ -92,8 +106,10 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/login': typeof LoginRoute
   '/chat': typeof AppChatRoute
+  '/wechat-inbox': typeof AppWechatInboxRoute
   '/agents/$agentId': typeof AppAgentsAgentIdRoute
   '/manage/agents': typeof AppManageAgentsRoute
+  '/manage/operators': typeof AppManageOperatorsRoute
   '/manage/skills': typeof AppManageSkillsRoute
   '/manage/toolkits': typeof AppManageToolkitsRoute
   '/manage/wechat': typeof AppManageWechatRoute
@@ -106,8 +122,10 @@ export interface FileRoutesById {
   '/_app': typeof AppRouteWithChildren
   '/login': typeof LoginRoute
   '/_app/chat': typeof AppChatRoute
+  '/_app/wechat-inbox': typeof AppWechatInboxRoute
   '/_app/agents/$agentId': typeof AppAgentsAgentIdRoute
   '/_app/manage/agents': typeof AppManageAgentsRoute
+  '/_app/manage/operators': typeof AppManageOperatorsRoute
   '/_app/manage/skills': typeof AppManageSkillsRoute
   '/_app/manage/toolkits': typeof AppManageToolkitsRoute
   '/_app/manage/wechat': typeof AppManageWechatRoute
@@ -120,8 +138,10 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/chat'
+    | '/wechat-inbox'
     | '/agents/$agentId'
     | '/manage/agents'
+    | '/manage/operators'
     | '/manage/skills'
     | '/manage/toolkits'
     | '/manage/wechat'
@@ -132,8 +152,10 @@ export interface FileRouteTypes {
     | '/'
     | '/login'
     | '/chat'
+    | '/wechat-inbox'
     | '/agents/$agentId'
     | '/manage/agents'
+    | '/manage/operators'
     | '/manage/skills'
     | '/manage/toolkits'
     | '/manage/wechat'
@@ -145,8 +167,10 @@ export interface FileRouteTypes {
     | '/_app'
     | '/login'
     | '/_app/chat'
+    | '/_app/wechat-inbox'
     | '/_app/agents/$agentId'
     | '/_app/manage/agents'
+    | '/_app/manage/operators'
     | '/_app/manage/skills'
     | '/_app/manage/toolkits'
     | '/_app/manage/wechat'
@@ -190,6 +214,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AppChatRouteImport
       parentRoute: typeof AppRoute
     }
+    '/_app/wechat-inbox': {
+      id: '/_app/wechat-inbox'
+      path: '/wechat-inbox'
+      fullPath: '/wechat-inbox'
+      preLoaderRoute: typeof AppWechatInboxRouteImport
+      parentRoute: typeof AppRoute
+    }
     '/_app/agents/$agentId': {
       id: '/_app/agents/$agentId'
       path: '/agents/$agentId'
@@ -202,6 +233,13 @@ declare module '@tanstack/react-router' {
       path: '/manage/agents'
       fullPath: '/manage/agents'
       preLoaderRoute: typeof AppManageAgentsRouteImport
+      parentRoute: typeof AppRoute
+    }
+    '/_app/manage/operators': {
+      id: '/_app/manage/operators'
+      path: '/manage/operators'
+      fullPath: '/manage/operators'
+      preLoaderRoute: typeof AppManageOperatorsRouteImport
       parentRoute: typeof AppRoute
     }
     '/_app/manage/skills': {
@@ -244,8 +282,10 @@ declare module '@tanstack/react-router' {
 
 interface AppRouteChildren {
   AppChatRoute: typeof AppChatRoute
+  AppWechatInboxRoute: typeof AppWechatInboxRoute
   AppAgentsAgentIdRoute: typeof AppAgentsAgentIdRoute
   AppManageAgentsRoute: typeof AppManageAgentsRoute
+  AppManageOperatorsRoute: typeof AppManageOperatorsRoute
   AppManageSkillsRoute: typeof AppManageSkillsRoute
   AppManageToolkitsRoute: typeof AppManageToolkitsRoute
   AppManageWechatRoute: typeof AppManageWechatRoute
@@ -255,8 +295,10 @@ interface AppRouteChildren {
 
 const AppRouteChildren: AppRouteChildren = {
   AppChatRoute: AppChatRoute,
+  AppWechatInboxRoute: AppWechatInboxRoute,
   AppAgentsAgentIdRoute: AppAgentsAgentIdRoute,
   AppManageAgentsRoute: AppManageAgentsRoute,
+  AppManageOperatorsRoute: AppManageOperatorsRoute,
   AppManageSkillsRoute: AppManageSkillsRoute,
   AppManageToolkitsRoute: AppManageToolkitsRoute,
   AppManageWechatRoute: AppManageWechatRoute,

@@ -253,8 +253,48 @@ export class ChatService {
     await this.mastraService.memory.saveMessages({ messages: [message] });
   }
 
+  /**
+   * 只把助手侧消息写入会话（不触发模型）。
+   * 用于运营台人工回复落库，与用户侧微信消息同线程。
+   */
+  async appendAssistantMessage(
+    agent: AgentWithMounts,
+    input: {
+      sessionId: string;
+      userId: string;
+      text: string;
+      threadTitle?: string;
+    },
+  ): Promise<void> {
+    const text = input.text.trim();
+    if (!text) return;
+
+    const { threadId, resourceId } = await this.ensureThread(
+      input.sessionId,
+      input.userId,
+      agent,
+      input.threadTitle,
+    );
+
+    const message: MastraDBMessage = {
+      id: crypto.randomUUID(),
+      role: 'assistant',
+      createdAt: new Date(),
+      threadId,
+      resourceId,
+      content: {
+        format: 2,
+        parts: [{ type: 'text', text }],
+      },
+    };
+    await this.mastraService.memory.saveMessages({ messages: [message] });
+  }
+
   // ============ 会话管理（Mastra Memory 存储） ============
 
+  /**
+   * Web 试聊会话列表（排除微信渠道 wechat:…，避免与运营收件箱混在一起）。
+   */
   async listAllSessions(userId: string) {
     const result = await this.mastraService.memory.listThreads({
       filter: { metadata: { userId } },
@@ -262,7 +302,48 @@ export class ChatService {
       perPage: 100,
     });
 
-    return result.threads.map((thread) => this.toSessionSummary(thread));
+    return result.threads
+      .filter((thread) => !String(thread.id).startsWith('wechat:'))
+      .map((thread) => this.toSessionSummary(thread));
+  }
+
+  /** 列出某微信账号下的会话线程（含群），供运营收件箱使用 */
+  async listWechatSessions(userId: string, accountId: string, limit = 80) {
+    const result = await this.mastraService.memory.listThreads({
+      filter: { metadata: { userId } },
+      orderBy: { field: 'updatedAt', direction: 'DESC' },
+      perPage: Math.min(200, Math.max(limit * 2, 50)),
+    });
+
+    const prefix = `wechat:`;
+    const out: Array<{
+      id: string;
+      title: string;
+      agentId: string;
+      agentName: string;
+      createdAt?: Date | string;
+      updatedAt?: Date | string;
+      accountId: string;
+      peerWxid: string;
+      isGroup: boolean;
+    }> = [];
+
+    for (const thread of result.threads) {
+      const id = String(thread.id);
+      if (!id.startsWith(prefix)) continue;
+      const m = id.match(/^wechat:([^:]+):([^:]+):(.+)$/);
+      if (!m) continue;
+      if (m[2] !== accountId) continue;
+      const peerWxid = m[3];
+      out.push({
+        ...this.toSessionSummary(thread),
+        accountId: m[2],
+        peerWxid,
+        isGroup: peerWxid.includes('@chatroom'),
+      });
+      if (out.length >= limit) break;
+    }
+    return out;
   }
 
   async getSessionDetail(sessionId: string, userId: string) {

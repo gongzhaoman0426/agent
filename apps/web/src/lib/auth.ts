@@ -7,10 +7,13 @@ export const authClient = createAuthClient({
   plugins: [usernameClient()],
 });
 
+export type UserRole = 'builder' | 'operator';
+
 export interface AuthUser {
   id: string;
   name: string;
   username?: string;
+  role?: UserRole;
 }
 
 const AUTH_USER_KEY = 'agent-next:auth-user';
@@ -33,16 +36,35 @@ export function setStoredUser(user: AuthUser | null) {
   }
 }
 
+async function fetchProfile(): Promise<Pick<AuthUser, 'role' | 'username' | 'name' | 'id'> | null> {
+  try {
+    const res = await fetch('/api/me', { credentials: 'include' });
+    if (!res.ok) return null;
+    return (await res.json()) as {
+      id: string;
+      name: string;
+      username: string;
+      role: UserRole;
+    };
+  } catch {
+    return null;
+  }
+}
+
 /** 启动时校准登录态（Cookie 会话是事实来源） */
 export async function refreshStoredUser(): Promise<AuthUser | null> {
   try {
     const { data } = await authClient.getSession();
     if (data?.user) {
+      const profile = await fetchProfile();
       const user: AuthUser = {
-        id: data.user.id,
-        name: data.user.name,
+        id: profile?.id || data.user.id,
+        name: profile?.name || data.user.name,
         username:
-          (data.user as { username?: string }).username ?? undefined,
+          profile?.username ||
+          (data.user as { username?: string }).username ||
+          undefined,
+        role: profile?.role === 'operator' ? 'operator' : 'builder',
       };
       setStoredUser(user);
       return user;

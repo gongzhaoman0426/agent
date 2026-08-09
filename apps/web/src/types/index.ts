@@ -151,8 +151,49 @@ export interface WechatAccount {
   proxy: string;
   deviceWay: string;
   enabled: boolean;
+  autoReplyPaused?: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface WechatInboxConversation {
+  sessionId: string;
+  title: string;
+  agentId: string;
+  agentName: string;
+  peerWxid: string;
+  isGroup: boolean;
+  updatedAt?: string;
+  createdAt?: string;
+}
+
+export interface WechatInboxList {
+  account: WechatAccount;
+  autoReplyPaused: boolean;
+  conversations: WechatInboxConversation[];
+}
+
+export interface WechatInboxMessages {
+  accountId: string;
+  agentId: string;
+  peerWxid: string;
+  isGroup: boolean;
+  autoReplyPaused: boolean;
+  sessionId: string;
+  title: string;
+  messages: UiMessage[];
+}
+
+export interface WechatPeerProfile {
+  peerWxid: string;
+  isGroup: boolean;
+  profile: {
+    userName: string;
+    nickName: string;
+    remark: string;
+    alias: string;
+    displayName: string;
+  };
 }
 
 export interface WechatLoginStart {
@@ -187,4 +228,15 @@ export interface ScheduledTask {
   startedAt?: string | null;
   finishedAt?: string | null;
   createdAt: string;
+}
+
+
+export interface OperatorAccount {
+  id: string;
+  name: string;
+  username: string;
+  role: 'operator';
+  accountIds: string[];
+  createdAt?: string;
+  updatedAt?: string;
 }

@@ -1,7 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { Bot } from 'lucide-react';
-import { authClient, setStoredUser } from '@/lib/auth';
+import { authClient, refreshStoredUser, setStoredUser } from '@/lib/auth';
 import { Button } from '@/ui/button';
 import { Input } from '@/ui/input';
 
@@ -53,7 +53,15 @@ function LoginPage() {
           });
         }
       }
-      navigate({ to: '/chat', search: { session: undefined, agent: undefined } });
+      const profile = await refreshStoredUser();
+      if (profile?.role === 'operator') {
+        navigate({
+          to: '/wechat-inbox',
+          search: { account: undefined, peer: undefined },
+        });
+      } else {
+        navigate({ to: '/chat', search: { session: undefined, agent: undefined } });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '操作失败');
     } finally {

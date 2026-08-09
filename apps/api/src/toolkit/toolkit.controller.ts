@@ -1,8 +1,10 @@
+import { Roles } from '../auth/auth.guard.js';
 import { Body, Controller, Get, Param, Put } from '@nestjs/common';
 import { CurrentUser } from '../auth/current-user.decorator.js';
 import type { CurrentUserPayload } from '../auth/auth.guard.js';
 import { ToolkitService } from './toolkit.service.js';
 
+@Roles('builder')
 @Controller('toolkits')
 export class ToolkitController {
   constructor(private readonly toolkitService: ToolkitService) {}

@@ -389,7 +389,8 @@ function ChatPage() {
                     <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-muted text-faint">
                       <MessagesSquare className="h-7 w-7" />
                     </div>
-                    <p className="mt-4 text-lg font-semibold">开始新对话</p>
+                    <p className="mt-4 text-lg font-semibold">试聊智能体</p>
+                    <p className="mt-1 text-sm text-faint">此处看不到微信真实聊天，请用「微信工作台」</p>
                     <p className="mt-1 text-[13px] text-muted-foreground">
                       请先在上方选择一个智能体
                     </p>
