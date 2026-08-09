@@ -241,7 +241,7 @@ export class WechatLoginService {
       }
     } else {
       this.logger.warn(
-        '未配置 WECHAT_PAD_CALLBACK_BASE_URL，将用 GetRedisSyncMsg 轮询入站（HttpSyncMsg 在 v875 常为空）',
+        '未配置 WECHAT_PAD_CALLBACK_BASE_URL；入站将使用 WebSocket /ws/GetSyncMsg',
       );
     }
 

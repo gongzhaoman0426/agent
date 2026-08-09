@@ -54,7 +54,10 @@ export async function padRequest<T>(
     );
   }
 
-  const dto = (await response.json()) as PadDto<T>;
+  // new_msg_id 等雪花 ID 超过 Number.MAX_SAFE_INTEGER，JSON.parse 会丢精度，
+  // 导致入站去重误判。先把 ≥16 位整数收成字符串再解析。
+  const rawText = await response.text();
+  const dto = parsePadJson(rawText) as PadDto<T>;
   if (dto.Code !== 200) {
     throw new PadApiError(
       dto.Text?.trim() || `v875 业务错误 Code=${dto.Code}`,
@@ -67,6 +70,18 @@ export async function padRequest<T>(
     assertPadBusinessOk(dto.Data, path);
   }
   return dto.Data;
+}
+
+/**
+ * 保留消息雪花 ID 精度的 JSON 解析。
+ * 只改写已知 msgId 字段，避免误伤 content 内嵌 JSON 里的大整数。
+ */
+export function parsePadJson(text: string): unknown {
+  const safe = text.replace(
+    /"(new_msg_id|newMsgId|msg_id|msgId)"\s*:\s*(-?\d{15,})/g,
+    '"$1":"$2"',
+  );
+  return JSON.parse(safe);
 }
 
 /** 解析微信错误 XML / errMsg 对象中的可读文案 */

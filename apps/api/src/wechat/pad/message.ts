@@ -1,4 +1,4 @@
-import { padRequest } from './client.js';
+import { PadApiError, padRequest } from './client.js';
 import type { PadAddMsg, PadSyncBatch, ParsedPadMessage } from './types.js';
 
 function extractStr(value: unknown): string {
@@ -158,7 +158,8 @@ export async function sendVoiceMessage(input: {
   if (voiceData.startsWith('data:') && comma >= 0) {
     voiceData = voiceData.slice(comma + 1);
   }
-  await padRequest('POST', '/message/SendVoice', {
+  // v875：语音常已送达，但 baseResponse.ret 仍可能是 -104；不能用通用业务 ret 判断
+  const data = await padRequest('POST', '/message/SendVoice', {
     key: input.authKey,
     body: {
       ToUserName: input.toWxid,
@@ -166,7 +167,43 @@ export async function sendVoiceMessage(input: {
       VoiceSecond: Math.max(1, Math.round(input.voiceSecond)),
       VoiceFormat: input.voiceFormat ?? 4,
     },
+    assertBusiness: false,
   });
+  assertSendVoiceOk(data);
+}
+
+/**
+ * SendVoice 成功特征：newMsgId 非空 / endFlag=1。
+ * 实测成功时仍可能 baseResponse.ret=-104 且 errMsg 为空。
+ */
+function assertSendVoiceOk(data: unknown) {
+  if (!data || typeof data !== 'object') {
+    throw new PadApiError('v875 /message/SendVoice: 无返回数据');
+  }
+  const root = data as Record<string, unknown>;
+  const newMsgId = root.newMsgId ?? root.new_msg_id;
+  const hasNewMsgId =
+    newMsgId !== undefined &&
+    newMsgId !== null &&
+    String(newMsgId).trim() !== '' &&
+    String(newMsgId) !== '0';
+  const endFlag = Number(root.endFlag ?? root.EndFlag ?? 0);
+  const br = root.baseResponse ?? root.base_response;
+  const ret =
+    br && typeof br === 'object'
+      ? Number((br as Record<string, unknown>).ret ?? 0)
+      : 0;
+
+  if (hasNewMsgId || endFlag === 1) {
+    return;
+  }
+  if (ret !== 0) {
+    throw new PadApiError(
+      `v875 /message/SendVoice: 业务 ret=${ret}`,
+      ret,
+      data,
+    );
+  }
 }
 
 /** 下载 URL 为 base64（不含 data: 前缀） */
