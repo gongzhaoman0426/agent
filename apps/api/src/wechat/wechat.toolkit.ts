@@ -267,13 +267,14 @@ export class WechatToolkit implements ToolkitDefinition {
       wechat_create_group: createTool({
         id: 'wechat-create-group',
         description:
-          '【管理员】创建群聊，至少传入 2 个好友 wxid；成功返回 chatRoomName 供后续邀请/公告使用。',
+          '【管理员】创建群聊。必须传至少 2 个好友的 wxid（不要昵称、不要自己的 wxid）；成功返回 chatRoomName。' +
+          '若微信返回「创建群聊失败」，多为账号风控/重登限制，不是参数写错；可提示用户用手机手动建群验证。',
         inputSchema: z.object({
           topic: z.string().optional().describe('群名称/主题'),
           userList: z
             .array(z.string().min(1))
             .min(2)
-            .describe('成员 wxid 列表'),
+            .describe('成员 wxid 列表，如 wxid_xxx'),
         }),
         execute: async (input, { requestContext }) => {
           const ctx = requireWechatChannelMeta(requestContext);

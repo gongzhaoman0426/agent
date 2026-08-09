@@ -176,21 +176,55 @@ export class WechatAdminOpsService {
   }) {
     await this.admin.requireAdmin(input.accountId, input.peerWxid);
     const row = await this.requireOwnedAccount(input.accountId, input.agentId);
-    const userList = input.userList.map((u) => u.trim()).filter(Boolean);
+    const self = row.wxid.trim();
+    const userList = [
+      ...new Set(
+        input.userList
+          .map((u) => u.trim())
+          .filter(Boolean)
+          .filter((u) => u !== self),
+      ),
+    ];
     if (userList.length < 2) {
-      throw new Error('创建群至少需要 2 个好友 wxid');
+      throw new Error(
+        '创建群至少需要 2 个好友 wxid（不要传自己的号，不要传昵称）',
+      );
     }
-    const data = await createChatRoom({
-      authKey: row.authKey,
-      topic: input.topic,
-      userList,
-    });
-    const chatRoomName = extractChatRoomName(data);
-    return {
-      success: true as const,
-      chatRoomName: chatRoomName || undefined,
-      data,
-    };
+    for (const u of userList) {
+      if (!u.startsWith('wxid_') && !/^[\w.-]{6,}$/.test(u)) {
+        throw new Error(
+          `成员必须是 wxid，不能传昵称：${u}。请先 list/search 联系人拿到 wxid`,
+        );
+      }
+    }
+
+    try {
+      const data = await createChatRoom({
+        authKey: row.authKey,
+        topic: input.topic,
+        userList,
+      });
+      const chatRoomName = extractChatRoomName(data);
+      this.logger.log(
+        `建群成功 account=${row.id} room=${chatRoomName || '?'} members=${userList.join(',')}`,
+      );
+      return {
+        success: true as const,
+        chatRoomName: chatRoomName || undefined,
+        data,
+      };
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      this.logger.error(
+        `建群失败 account=${row.id} members=${userList.join(',')} : ${msg}`,
+      );
+      // 协议侧常见：参数正确仍返回「创建群聊失败」，多为风控/新登录限制
+      throw new Error(
+        msg.includes('创建群聊失败')
+          ? '微信拒绝建群（创建群聊失败）。好友关系正常时多为账号风控或刚重登限制；可先在手机微信用相同好友手动建群验证，或稍后再试。'
+          : `建群失败：${msg}`,
+      );
+    }
   }
 
   async inviteToGroup(input: {
