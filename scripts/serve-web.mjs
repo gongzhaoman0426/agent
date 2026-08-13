@@ -97,16 +97,22 @@ if (!fs.existsSync(DIST)) {
   process.exit(1);
 }
 
-http
-  .createServer((req, res) => {
-    if ((req.url || '').startsWith('/api')) {
-      proxyApi(req, res);
-      return;
-    }
-    serveStatic(req, res);
-  })
-  .listen(WEB_PORT, () => {
-    console.log(
-      `agent-next web 已启动: http://0.0.0.0:${WEB_PORT}  (API → ${API_TARGET.origin})`,
-    );
-  });
+const server = http.createServer((req, res) => {
+  if ((req.url || '').startsWith('/api')) {
+    proxyApi(req, res);
+    return;
+  }
+  serveStatic(req, res);
+});
+
+server.on('error', (err) => {
+  console.error(`web 监听失败 ${WEB_PORT}:`, err);
+  process.exit(1);
+});
+
+// 必须显式绑 0.0.0.0，否则 Node 可能只听 IPv6(::)，公网 IPv4 访问会超时
+server.listen(WEB_PORT, '0.0.0.0', () => {
+  console.log(
+    `agent-next web 已启动: http://0.0.0.0:${WEB_PORT}  (API → ${API_TARGET.origin})`,
+  );
+});
